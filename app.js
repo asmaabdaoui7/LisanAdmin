@@ -1,15 +1,16 @@
 /**
  * ============================================================================
- * لِسَان | LISAN — غرفة العمليات ولوحة التحكم الشاملة (app.js)
+ * لِسَان | LISAN — غرفة العمليات ولوحة التحكم الشاملة (app.js) — الإصدار 2.0
  * ============================================================================
  * الميزات المدمجة:
- * 1. تأسيس تلقائي للأدمن الرئيسي (Admin / 123456) بتشفير SHA-256
- * 2. نظام الوثوق بالمتصفح (دخول مباشر أو عبر الرمز السريع 4 أرقام) + استعادة الرمز
- * 3. صلاحيات دقيقة بالاختيار (Checkboxes) لكل مشرف + منع تكرار أسماء المستخدمين
- * 4. مبدأ الكشف التدريجي (الكراتين المرتبة — صفر ازدحام) + محرك بحث عربي ذكي شامل
- * 5. ضغط الصور في المتصفح ورفعها تلقائياً إلى ImgBB وتخزين الروابط في Firestore
- * 6. محرر نصوص أكاديمي شبيه بـ Word + معاينة يوتيوب و PDF
- * 7. تحكم شامل في كل تفصيلة وميزة (Feature Flags) وفي الأقسام الستة وفروعها
+ * 1. تأسيس تلقائي للأدمن الرئيسي (Admin / 123456) بتشفير SHA-256 + فحص لحظي عند الدخول
+ * 2. الوثوق بالمتصفح + الرمز السريع (4 أرقام) + استعادة الرمز بكلمة المرور
+ * 3. ملفات الموظفين (صورة شخصية + اسم + نبذة تعريفية) + صلاحيات دقيقة بالاختيار
+ * 4. بحث عربي ذكي شامل يلتقط الكلمات من المحتوى والاختبارات ومن (نبذة الموظف)
+ * 5. المرآة الفورية: مزامنة الشعار والاسم واللون وأيقونة التبويب بين المستودعين
+ * 6. المحرر الأكاديمي الحر: صور في أي مكان (رفع/لصق/سحب) + تحكم بالحجم والشرح
+ *    + معاينة حية قبل النشر + حفظ تلقائي للمسودات
+ * 7. مولّد خريطة الموقع (sitemap.xml) الكامل لمحركات البحث + مفاتيح الميزات الشاملة
  * ============================================================================
  */
 
@@ -52,7 +53,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 /* ============================================================================
- * 2. مصفوفة الصلاحيات الدقيقة (Granular Permissions) والإعدادات الافتراضية
+ * 2. مصفوفة الصلاحيات ومفاتيح الميزات والإعدادات الافتراضية
  * ============================================================================ */
 const PERMISSIONS_CATALOG = [
   { key: "manage_content", label: "إضافة وتعديل المحتوى (الكتب، المصطلحات، المحاضرات، الأبحاث)" },
@@ -61,7 +62,7 @@ const PERMISSIONS_CATALOG = [
   { key: "manage_quizzes", label: "إدارة بنك الاختبارات التفاعلية والأسئلة" },
   { key: "manage_sections", label: "تعديل أسماء الأقسام الستة وفروعها وأوصافها" },
   { key: "manage_features", label: "إخفاء وإظهار ميزات وأقسام الموقع العام (Feature Flags)" },
-  { key: "manage_settings", label: "تعديل هوية المنصة، الشعار، الألوان، الإعلان، والتذييل" },
+  { key: "manage_settings", label: "تعديل هوية المنصة، الشعار، الألوان، الإعلان، وخريطة SEO" },
   { key: "manage_admins", label: "إدارة فريق المشرفين ومنح الصلاحيات" },
   { key: "view_logs", label: "الاطلاع على سجل النشاطات والعمليات" }
 ];
@@ -79,6 +80,7 @@ const FEATURE_FLAGS_CATALOG = [
   { key: "studentSubmissions", label: "زر مشاركة مشاريع الطلبة", desc: "السماح للطلبة بإرسال مشاريعهم للمراجعة" },
   { key: "externalLinkWarning", label: "تنبيه الأمان للروابط الخارجية", desc: "عرض إشعار تحذيري قبل مغادرة المنصة لرابط خارجي" },
   { key: "fontControls", label: "أزرار تكبير وتصغير الخط", desc: "إتاحة التحكم بحجم الخط في صفحة القراءة الأكاديمية" },
+  { key: "warmPaperMode", label: "وضع القراءة الورقي الدافئ (Sepia)", desc: "زر تحويل خلفية المقال إلى لون الورق الكريمي المريح للعين" },
   { key: "shareButtons", label: "زر مشاركة الروابط", desc: "إظهار زر نسخ ومشاركة رابط المادة للزوار" }
 ];
 
@@ -92,6 +94,7 @@ const DEFAULT_SETTINGS = {
   footerText: "لِسَان | LISAN — الفضاء الرقمي الأكاديمي لطلبة اللسانيات العربية",
   contactEmail: "",
   themeAccent: "#0071e3",
+  publicBaseUrl: "",
   socialLinks: { twitter: "", telegram: "", youtube: "", facebook: "" },
   features: {
     globalSearch: true,
@@ -103,6 +106,7 @@ const DEFAULT_SETTINGS = {
     sectionExchange: true,
     externalLinkWarning: true,
     fontControls: true,
+    warmPaperMode: true,
     shareButtons: true,
     announcements: true,
     statsBar: true,
@@ -124,25 +128,25 @@ const DEFAULT_SETTINGS = {
     quiz: {
       id: "quiz", order: 3, featureKey: "sectionQuiz", title: "اختبر معارفك",
       shortDesc: "اختبارات تفاعلية في فروع اللسانيات، أسئلة اختيار من متعدد، وتحديات أسبوعية.",
-      icon: "check-circle", accent: "#30b0c7",
+      icon: "check-circle", accent: "#0e9aa7",
       branches: ["اختبارات في فروع اللسانيات", "أسئلة اختيار من متعدد", "تحديات أسبوعية"]
     },
     research: {
       id: "research", order: 4, featureKey: "sectionResearch", title: "فضاء الباحث اللساني",
       shortDesc: "منهجية إعداد مذكرة الماستر، تحليل المدونة، التوثيق العلمي، وأدوات البحث.",
-      icon: "compass", accent: "#ff9500",
+      icon: "compass", accent: "#c88a2e",
       branches: ["كيفية إعداد مذكرة ماستر", "منهجية تحليل المدونة", "التوثيق العلمي", "أدوات البحث اللساني"]
     },
     lectures: {
       id: "lectures", order: 5, featureKey: "sectionLectures", title: "محاضرات ودروس",
       shortDesc: "دروس مختصرة ومرئية في الأصوات، الصرف، النحو، الدلالة، التداولية، وتحليل الخطاب.",
-      icon: "play-circle", accent: "#af52de",
+      icon: "play-circle", accent: "#8b5cf6",
       branches: ["علم الأصوات", "الصرف والنحو", "الدلالة والتداولية", "تحليل الخطاب"]
     },
     exchange: {
       id: "exchange", order: 6, featureKey: "sectionExchange", title: "فضاء التبادل العلمي",
       shortDesc: "عرض مشاريع الطلبة، الإعلان عن الملتقيات، المسابقات العلمية، وتجارب البحث.",
-      icon: "users", accent: "#34c759",
+      icon: "users", accent: "#16a34a",
       branches: ["عرض مشاريع الطلبة", "الإعلان عن الملتقيات", "مسابقات علمية", "مشاركة تجارب البحث"]
     }
   }
@@ -153,7 +157,7 @@ const DEFAULT_SETTINGS = {
  * ============================================================================ */
 const state = {
   currentUser: null,
-  view: "hub", // hub | content | quizzes | submissions | sections | features | settings | admins | security
+  view: "hub",
   settings: structuredClone(DEFAULT_SETTINGS),
   items: [],
   quizzes: [],
@@ -167,7 +171,9 @@ const state = {
     adminSearch: "",
     logSearch: ""
   },
-  editingQuizQuestions: []
+  editingQuizQuestions: [],
+  selectedEditorFigure: null,
+  draftTimer: null
 };
 
 /* ============================================================================
@@ -188,11 +194,13 @@ const ICONS = {
   arrowLeft: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>`,
   upload: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,
   trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>`,
-  edit: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`
+  edit: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+  eye: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  globe: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`
 };
 
 /* ============================================================================
- * 5. أدوات التشفير (SHA-256) والبحث العربي الذكي وضغط الصور لـ ImgBB
+ * 5. التشفير، البحث العربي الذكي، وضغط الصور ورفعها إلى ImgBB
  * ============================================================================ */
 async function sha256(text) {
   const data = new TextEncoder().encode(String(text));
@@ -251,7 +259,7 @@ function showToast(msg, type = "default") {
   setTimeout(() => {
     el.classList.remove("show");
     setTimeout(() => el.remove(), 300);
-  }, 3500);
+  }, 3600);
 }
 
 function formatDate(val) {
@@ -267,8 +275,16 @@ function formatDate(val) {
   }
 }
 
+function renderAvatarHtml(url, fallbackName = "A", extraClass = "") {
+  const letter = escapeHtml((fallbackName || "A").trim()[0] || "A");
+  if (url) {
+    return `<img src="${escapeHtml(url)}" alt="${escapeHtml(fallbackName)}" class="avatar-img ${extraClass}" />`;
+  }
+  return `<div class="avatar-placeholder ${extraClass}">${letter}</div>`;
+}
+
 /**
- * ضغط الصورة ذكياً داخل المتصفح ثم رفعها إلى ImgBB وإرجاع الرابط المباشر
+ * ضغط الصورة في المتصفح ثم رفعها إلى ImgBB وإرجاع الرابط المباشر
  */
 async function compressImageToBase64(file, maxWidth = 1400, quality = 0.82) {
   return new Promise((resolve, reject) => {
@@ -299,10 +315,10 @@ async function compressImageToBase64(file, maxWidth = 1400, quality = 0.82) {
   });
 }
 
-async function uploadCompressedImageToImgBB(file, statusEl = null) {
+async function uploadCompressedImageToImgBB(file, statusEl = null, maxWidth = 1400) {
   if (!file) throw new Error("لم يتم اختيار صورة");
   if (statusEl) statusEl.textContent = "جارٍ ضغط الصورة وتقليل حجمها...";
-  const base64 = await compressImageToBase64(file);
+  const base64 = await compressImageToBase64(file, maxWidth, 0.82);
 
   if (statusEl) statusEl.textContent = "جارٍ الرفع إلى خادم الصور...";
   const formData = new FormData();
@@ -321,18 +337,63 @@ async function uploadCompressedImageToImgBB(file, statusEl = null) {
 }
 
 /* ============================================================================
- * 6. تسجيل النشاطات وتأسيس الأدمن الرئيسي تلقائياً (Admin / 123456)
+ * 6. المرآة الفورية بين المستودعين (مزامنة الشعار واللون والاسم والـ Favicon)
+ * ============================================================================ */
+function applyAdminBranding() {
+  const s = state.settings;
+  if (s.themeAccent) {
+    document.documentElement.style.setProperty("--accent", s.themeAccent);
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) themeMeta.setAttribute("content", s.themeAccent);
+  }
+
+  const brandTitle = document.getElementById("admin-brand-title");
+  if (brandTitle) brandTitle.textContent = `غرفة عمليات ${s.siteName || "لِسَان"}`;
+
+  const logoWrap = document.getElementById("admin-logo-wrap");
+  if (logoWrap) {
+    if (s.logoUrl) {
+      logoWrap.innerHTML = `<img src="${escapeHtml(s.logoUrl)}" alt="${escapeHtml(s.siteName)}" class="brand-logo-img" />`;
+      const fav = document.querySelector('link[rel="icon"]');
+      if (fav) fav.setAttribute("href", s.logoUrl);
+    } else {
+      logoWrap.textContent = (s.siteName || "ل").trim()[0] || "ل";
+    }
+  }
+
+  // تحديث شارة المستخدم الحالي وصورته في الشريط العلوي
+  if (state.currentUser) {
+    const userNameEl = document.getElementById("current-admin-name");
+    const userAvatarEl = document.getElementById("current-admin-avatar");
+    if (userNameEl) {
+      userNameEl.textContent = `${state.currentUser.displayName || state.currentUser.username}`;
+    }
+    if (userAvatarEl) {
+      userAvatarEl.innerHTML = renderAvatarHtml(
+        state.currentUser.avatarUrl,
+        state.currentUser.displayName || state.currentUser.username,
+        "mini"
+      );
+    }
+  }
+}
+
+/* ============================================================================
+ * 7. سجل النشاطات + التأسيس التلقائي للأدمن الرئيسي (Admin / 123456)
  * ============================================================================ */
 async function logActivity(action, details = "") {
   try {
-    await addDoc(collection(db, "logs"), {
+    const entry = {
       actor: state.currentUser?.displayName || state.currentUser?.username || "النظام",
       actorUsername: state.currentUser?.username || "system",
+      actorAvatar: state.currentUser?.avatarUrl || "",
       action,
       details,
       createdAt: new Date().toISOString(),
       ts: serverTimestamp()
-    });
+    };
+    const ref = await addDoc(collection(db, "logs"), entry);
+    state.logs.unshift({ id: ref.id, ...entry });
   } catch (e) {
     console.warn("Log skipped:", e);
   }
@@ -347,6 +408,8 @@ async function ensureBootstrapSuperAdmin() {
       username: "Admin",
       usernameLower: "admin",
       displayName: "الإدارة الرئيسية",
+      avatarUrl: "",
+      bio: "الحساب الرئيسي للإدارة العليا لمنصة لِسَان | LISAN",
       passwordHash: passHash,
       pinHash: "",
       isSuperAdmin: true,
@@ -358,14 +421,11 @@ async function ensureBootstrapSuperAdmin() {
 }
 
 /* ============================================================================
- * 7. نظام المصادقة: اسم مستخدم/كلمة مرور + الوثوق بالمتصفح + الرمز السريع 4 أرقام
+ * 8. نظام المصادقة: كلمة المرور + الوثوق بالمتصفح + الرمز السريع 4 أرقام
  * ============================================================================ */
 function getTrustedDevice() {
-  try {
-    return JSON.parse(localStorage.getItem(TRUST_STORAGE_KEY) || "null");
-  } catch {
-    return null;
-  }
+  try { return JSON.parse(localStorage.getItem(TRUST_STORAGE_KEY) || "null"); }
+  catch { return null; }
 }
 
 function setTrustedDevice(data) {
@@ -391,9 +451,15 @@ async function checkInitialAuth() {
   const adminApp = document.getElementById("admin-app");
 
   try {
+    // جلب إعدادات الهوية مبكراً لتظهر في شاشة الدخول أيضاً (المرآة الفورية)
+    const setSnap = await getDoc(doc(db, "settings", "global")).catch(() => null);
+    if (setSnap?.exists()) {
+      state.settings = deepMergeSettings(setSnap.data());
+      applyAdminBranding();
+    }
+
     await ensureBootstrapSuperAdmin();
 
-    // 1. فحص الجلسة الحالية في التبويب
     const savedSession = JSON.parse(sessionStorage.getItem(SESSION_STORAGE_KEY) || "null");
     if (savedSession?.adminId) {
       const snap = await getDoc(doc(db, "admins", savedSession.adminId));
@@ -403,17 +469,12 @@ async function checkInitialAuth() {
       }
     }
 
-    // 2. فحص المتصفح الموثوق
     const trusted = getTrustedDevice();
     if (trusted?.adminId) {
       const snap = await getDoc(doc(db, "admins", trusted.adminId));
       if (snap.exists() && snap.data().active !== false) {
         const adminData = { id: snap.id, ...snap.data() };
-        if (trusted.mode === "direct" && !adminData.pinHash) {
-          await completeLogin(adminData, false);
-          return;
-        }
-        if (trusted.mode === "direct" && trusted.skipPin === true) {
+        if (trusted.mode === "direct" && (trusted.skipPin === true || !adminData.pinHash)) {
           await completeLogin(adminData, false);
           return;
         }
@@ -429,12 +490,19 @@ async function checkInitialAuth() {
     }
   } catch (err) {
     console.error("Auth init error:", err);
-    showToast("تعذر الاتصال بقاعدة البيانات، تحقق من الإنترنت وإعدادات Firestore", "error");
+    showToast("تنبيه: تحقق من قواعد أمان Firestore أو اتصال الإنترنت", "error");
   }
 
   adminApp.hidden = true;
   authScreen.hidden = false;
   renderPasswordLoginView();
+}
+
+function getAuthBadgeHtml() {
+  if (state.settings.logoUrl) {
+    return `<div class="auth-brand-badge has-img"><img src="${escapeHtml(state.settings.logoUrl)}" alt="" /></div>`;
+  }
+  return `<div class="auth-brand-badge">${escapeHtml((state.settings.siteName || "ل")[0])}</div>`;
 }
 
 function renderPasswordLoginView(prefillUsername = "", mode = "login") {
@@ -443,11 +511,11 @@ function renderPasswordLoginView(prefillUsername = "", mode = "login") {
   const isPinReset = mode === "reset-pin";
 
   box.innerHTML = `
-    <div class="auth-brand-badge">ل</div>
-    <h1 class="auth-title">${isPinReset ? "استعادة وتغيير الرمز السريع" : "غرفة عمليات لِسَان | LISAN"}</h1>
+    ${getAuthBadgeHtml()}
+    <h1 class="auth-title">${isPinReset ? "استعادة الرمز السريع" : `غرفة عمليات ${escapeHtml(state.settings.siteName)}`}</h1>
     <p class="auth-subtitle">
       ${isPinReset
-        ? "أدخل اسم المستخدم وكلمة المرور للتحقق من هويتك وتعيين رمز سريع جديد من 4 أرقام."
+        ? "أدخل اسم المستخدم وكلمة المرور للتحقق وتعيين رمز سريع جديد من 4 أرقام."
         : "سجّل الدخول بحسابك الإداري لإدارة المنصة بالكامل."}
     </p>
 
@@ -475,9 +543,7 @@ function renderPasswordLoginView(prefillUsername = "", mode = "login") {
       </button>
     </form>
 
-    ${isPinReset ? `
-      <button type="button" class="text-link-btn" id="back-to-login-btn">العودة لتسجيل الدخول</button>
-    ` : ""}
+    ${isPinReset ? `<button type="button" class="text-link-btn" id="back-to-login-btn">العودة لتسجيل الدخول</button>` : ""}
   `;
 
   document.getElementById("back-to-login-btn")?.addEventListener("click", () => checkInitialAuth());
@@ -494,6 +560,9 @@ function renderPasswordLoginView(prefillUsername = "", mode = "login") {
     btn.textContent = "جارٍ التحقق...";
 
     try {
+      // ضمان تأسيس الأدمن الرئيسي لحظياً إذا كانت قاعدة البيانات لا تزال فارغة
+      await ensureBootstrapSuperAdmin();
+
       const admin = await findAdminByUsername(username);
       const hashed = await sha256(password);
       if (!admin || admin.passwordHash !== hashed) {
@@ -529,7 +598,6 @@ function renderPasswordLoginView(prefillUsername = "", mode = "login") {
         return;
       }
 
-      // هل هذا المتصفح موثوق مسبقاً لنفس المستخدم؟
       const trusted = getTrustedDevice();
       if (trusted?.adminId === admin.id) {
         await completeLogin(admin, true);
@@ -538,7 +606,10 @@ function renderPasswordLoginView(prefillUsername = "", mode = "login") {
       }
     } catch (err) {
       console.error(err);
-      errEl.textContent = "حدث خطأ في الاتصال بـ Firebase.";
+      const reason = err?.code === "permission-denied"
+        ? "رفضت قواعد أمان Firestore الاتصال (تحقق من تبويب Rules)."
+        : "تعذر الاتصال بـ Firebase، تحقق من الإنترنت.";
+      errEl.textContent = reason;
       errEl.hidden = false;
       btn.disabled = false;
       btn.textContent = isPinReset ? "التحقق وتحديث الرمز السريع" : "تسجيل الدخول";
@@ -559,10 +630,10 @@ function renderTrustBrowserPrompt(admin) {
     <div class="trust-options-stack">
       <div class="trust-option-card">
         <strong>1. الوثوق مع الرمز السريع (4 أرقام) — الأعلى أماناً</strong>
-        <p>${admin.pinHash ? "ستستخدم رمزك السريع المسجل للدخول الفوري." : "عيّن رمزاً سريعاً من 4 أرقام للدخول السريع والآمن:"}</p>
+        <p>${admin.pinHash ? "ستستخدم رمزك السريع المسجل للدخول الفوري." : "عيّن رمزاً سريعاً من 4 أرقام للدخول السريع:"}</p>
         ${!admin.pinHash ? `
           <input type="password" id="setup-pin-input" maxlength="4" inputmode="numeric"
-            placeholder="أدخل 4 أرقام (مثال: 4820)" class="pin-inline-input" />
+            placeholder="أدخل 4 أرقام" class="pin-inline-input" />
         ` : ""}
         <button type="button" class="btn-primary-glass full-width" id="trust-with-pin-btn">
           الوثوق بالمتصفح عبر الرمز السريع
@@ -611,7 +682,7 @@ function renderPinLoginView(admin) {
   let pinDigits = "";
 
   box.innerHTML = `
-    <div class="auth-brand-badge">ل</div>
+    <div class="pin-user-avatar">${renderAvatarHtml(admin.avatarUrl, admin.displayName || admin.username, "lg")}</div>
     <h2 class="auth-title">أهلاً بعودتك، ${escapeHtml(admin.displayName || admin.username)}</h2>
     <p class="auth-subtitle">أدخل الرمز السريع المكوّن من 4 أرقام للدخول الفوري</p>
 
@@ -636,8 +707,7 @@ function renderPinLoginView(admin) {
   `;
 
   const updateDots = () => {
-    const dots = box.querySelectorAll(".pin-dot");
-    dots.forEach((d, i) => d.classList.toggle("filled", i < pinDigits.length));
+    box.querySelectorAll(".pin-dot").forEach((d, i) => d.classList.toggle("filled", i < pinDigits.length));
   };
 
   const tryVerifyPin = async () => {
@@ -658,34 +728,22 @@ function renderPinLoginView(admin) {
     document.getElementById("pin-error-msg").hidden = true;
     pinDigits += digit;
     updateDots();
-    if (pinDigits.length === 4) {
-      setTimeout(tryVerifyPin, 120);
-    }
+    if (pinDigits.length === 4) setTimeout(tryVerifyPin, 120);
   };
 
   box.querySelectorAll("[data-digit]").forEach((btn) => {
     btn.addEventListener("click", () => pushDigit(btn.dataset.digit));
   });
-  document.getElementById("pin-clear-btn")?.addEventListener("click", () => {
-    pinDigits = "";
-    updateDots();
-  });
-  document.getElementById("pin-back-btn")?.addEventListener("click", () => {
-    pinDigits = pinDigits.slice(0, -1);
-    updateDots();
-  });
+  document.getElementById("pin-clear-btn")?.addEventListener("click", () => { pinDigits = ""; updateDots(); });
+  document.getElementById("pin-back-btn")?.addEventListener("click", () => { pinDigits = pinDigits.slice(0, -1); updateDots(); });
 
-  // دعم الإدخال من لوحة المفاتيح أيضاً
   const keyHandler = (e) => {
     if (document.getElementById("auth-screen").hidden) {
       document.removeEventListener("keydown", keyHandler);
       return;
     }
     if (/^\d$/.test(e.key)) pushDigit(e.key);
-    else if (e.key === "Backspace") {
-      pinDigits = pinDigits.slice(0, -1);
-      updateDots();
-    }
+    else if (e.key === "Backspace") { pinDigits = pinDigits.slice(0, -1); updateDots(); }
   };
   document.addEventListener("keydown", keyHandler);
 
@@ -707,13 +765,9 @@ async function completeLogin(admin, recordLog = true) {
   document.getElementById("auth-screen").hidden = true;
   document.getElementById("admin-app").hidden = false;
 
-  const userBadge = document.getElementById("current-admin-name");
-  if (userBadge) {
-    userBadge.textContent = `${admin.displayName || admin.username}${admin.isSuperAdmin ? " (إدارة عليا)" : ""}`;
-  }
-
-  if (recordLog) await logActivity("تسجيل دخول", `دخل المستخدم ${admin.username} إلى غرفة العمليات`);
   await loadAllAdminData();
+  applyAdminBranding();
+  if (recordLog) await logActivity("تسجيل دخول", `دخل ${admin.displayName || admin.username} إلى غرفة العمليات`);
   navigateAdmin("hub");
 }
 
@@ -724,7 +778,7 @@ function logoutSession() {
 }
 
 /* ============================================================================
- * 8. جلب جميع البيانات الحية من Firestore
+ * 9. جلب جميع البيانات الحية من Firestore
  * ============================================================================ */
 function deepMergeSettings(remote = {}) {
   const merged = structuredClone(DEFAULT_SETTINGS);
@@ -765,13 +819,11 @@ async function loadAllAdminData() {
     state.logs = logsSnap.value.docs.map((d) => ({ id: d.id, ...d.data() }));
   }
 
-  if (state.settings.themeAccent) {
-    document.documentElement.style.setProperty("--accent", state.settings.themeAccent);
-  }
+  applyAdminBranding();
 }
 
 /* ============================================================================
- * 9. التنقل بالكشف التدريجي (الكراتين المرتبة — صفر ازدحام)
+ * 10. التنقل بالكشف التدريجي (الكراتين المرتبة + شبكة Bento للجوال)
  * ============================================================================ */
 function navigateAdmin(viewName) {
   state.view = viewName;
@@ -796,7 +848,7 @@ function renderAdminView() {
   }
 }
 
-/* ---------- 9.1 الشاشة الرئيسية للوحة التحكم (صناديق الكراتين المرتبة) ---------- */
+/* ---------- 10.1 الشاشة الرئيسية للوحة التحكم (شبكة Bento المتناسقة) ---------- */
 function renderHubView(container) {
   const pendingCount = state.items.filter((x) => x.status === "pending").length;
   const publishedCount = state.items.filter((x) => !x.status || x.status === "published").length;
@@ -804,73 +856,78 @@ function renderHubView(container) {
   const boxes = [
     {
       id: "content", perm: "manage_content", icon: ICONS.content, accent: "#0071e3",
-      title: "إدارة المحتوى والمواد",
-      desc: "إضافة وتعديل الكتب، المصطلحات، المحاضرات، الفيديوهات، وملفات PDF عبر المحرر الأكاديمي.",
+      title: "إدارة المحتوى",
+      desc: "إضافة وتعديل الكتب، المصطلحات، المحاضرات، الصور الحرة، وملفات PDF.",
       badge: `${publishedCount} منشور`
     },
     {
-      id: "quizzes", perm: "manage_quizzes", icon: ICONS.quiz, accent: "#30b0c7",
-      title: "بنك الاختبارات التفاعلية",
+      id: "quizzes", perm: "manage_quizzes", icon: ICONS.quiz, accent: "#0e9aa7",
+      title: "بنك الاختبارات",
       desc: "إنشاء اختبارات اختيار من متعدد مع الشروحات اللسانية الفورية للطلبة.",
       badge: `${state.quizzes.length} اختبار`
     },
     {
-      id: "submissions", perm: "approve_submissions", icon: ICONS.inbox, accent: "#34c759",
-      title: "مساهمات ومشاريع الطلبة",
-      desc: "مراجعة المشاريع والتجارب المرسلة من الزوار واعتمادها للنشر أو رفضها.",
-      badge: pendingCount > 0 ? `${pendingCount} بانتظار المراجعة` : "لا توجد طلبات معلقة",
+      id: "submissions", perm: "approve_submissions", icon: ICONS.inbox, accent: "#16a34a",
+      title: "مساهمات الطلبة",
+      desc: "مراجعة المشاريع والتجارب المرسلة من الزوار واعتمادها للنشر.",
+      badge: pendingCount > 0 ? `${pendingCount} معلق` : "لا معلقات",
       highlight: pendingCount > 0
     },
     {
-      id: "sections", perm: "manage_sections", icon: ICONS.layers, accent: "#ff9500",
-      title: "الأقسام الستة والفروع",
-      desc: "تعديل مسميات الأقسام، أوصافها، ألوانها، وإضافة أو حذف الفروع الداخلية لكل قسم.",
-      badge: "6 أقسام مرنة"
+      id: "sections", perm: "manage_sections", icon: ICONS.layers, accent: "#c88a2e",
+      title: "الأقسام والفروع",
+      desc: "تعديل مسميات الأقسام الستة وأوصافها وألوانها وفروعها الداخلية.",
+      badge: "6 أقسام"
     },
     {
-      id: "features", perm: "manage_features", icon: ICONS.sliders, accent: "#af52de",
-      title: "مفاتيح الميزات والظهور",
-      desc: "تشغيل أو إخفاء أي قسم أو أداة أو ميزة في الموقع العام بضغطة زر واحدة.",
+      id: "features", perm: "manage_features", icon: ICONS.sliders, accent: "#8b5cf6",
+      title: "مفاتيح الميزات",
+      desc: "إخفاء أو إظهار أي قسم أو ميزة في الموقع العام بضغطة زر واحدة.",
       badge: "تحكم شامل"
     },
     {
       id: "settings", perm: "manage_settings", icon: ICONS.palette, accent: "#5e5ce6",
-      title: "هوية المنصة والإعدادات",
-      desc: "تغيير اسم المنصة، الشعار، النصوص الترحيبية، الإعلان العلوي، الألوان، وروابط التواصل.",
-      badge: "المظهر والهوية"
+      title: "الهوية وخريطة SEO",
+      desc: "تغيير الشعار والألوان والنصوص وتوليد ملف sitemap.xml لمحركات البحث.",
+      badge: "المظهر والسيو"
     },
     {
-      id: "admins", perm: "manage_admins", icon: ICONS.users, accent: "#ec4899",
-      title: "فريق الإدارة والصلاحيات",
-      desc: "إضافة موظفين ومشرفين جدد وتحديد صلاحيات كل شخص بدقة عبر مربعات الاختيار.",
+      id: "admins", perm: "manage_admins", icon: ICONS.users, accent: "#db2777",
+      title: "فريق الإدارة",
+      desc: "إضافة موظفين بصورهم ونبذهم التعريفية وتحديد صلاحيات كل شخص بدقة.",
       badge: `${state.admins.length} حساب`
     },
     {
-      id: "security", perm: null, icon: ICONS.shield, accent: "#111827",
-      title: "حسابي، الأمان، والسجلات",
-      desc: "تغيير كلمة المرور، ضبط الرمز السريع (4 أرقام)، الثقة بالمتصفح، وسجل العمليات.",
-      badge: "أمان الحساب"
+      id: "security", perm: null, icon: ICONS.shield, accent: "#1e293b",
+      title: "حسابي والسجلات",
+      desc: "ملفي الشخصي وصورتي، الرمز السريع (4 أرقام)، كلمة المرور، والسجلات.",
+      badge: "الأمان"
     }
   ].filter((b) => !b.perm || hasPerm(b.perm));
 
   container.innerHTML = `
     <div class="container">
-      <section class="glass-card hub-welcome">
-        <div>
-          <span class="pill-badge">غرفة العمليات المركزية</span>
-          <h1>مرحباً، ${escapeHtml(state.currentUser.displayName || state.currentUser.username)}</h1>
-          <p>كل أداة مرتبة داخل صندوقها الخاص لراحة البال وسرعة الإنجاز. اختر الصندوق المطلوب للبدء.</p>
+      <section class="glass-card hub-welcome heritage-frame">
+        <div class="hub-welcome-user">
+          ${renderAvatarHtml(state.currentUser.avatarUrl, state.currentUser.displayName || state.currentUser.username, "xl")}
+          <div>
+            <span class="pill-badge">غرفة العمليات المركزية</span>
+            <h1>مرحباً، ${escapeHtml(state.currentUser.displayName || state.currentUser.username)}</h1>
+            <p>${escapeHtml(state.currentUser.bio || "كل أداة مرتبة داخل صندوقها الخاص لراحة البال وسرعة الإنجاز.")}</p>
+          </div>
         </div>
         <button type="button" class="hero-search-trigger" id="hub-open-spotlight">
           <span>${ICONS.search}</span>
-          <span>بحث ذكي شامل في المحتوى والمشرفين...</span>
+          <span>بحث ذكي في المحتوى ونبذ الموظفين...</span>
           <kbd>/</kbd>
         </button>
       </section>
 
       <section class="hub-grid">
-        ${boxes.map((b) => `
-          <article class="glass-card hub-box ${b.highlight ? "attention" : ""}" data-nav-box="${b.id}" tabindex="0" role="button">
+        ${boxes.map((b, idx) => `
+          <article class="glass-card hub-box heritage-card stagger-in ${b.highlight ? "attention" : ""}"
+            style="--stagger: ${idx}; --box-accent: ${b.accent}"
+            data-nav-box="${b.id}" tabindex="0" role="button">
             <div class="hub-box-top">
               <div class="hub-icon" style="--box-accent: ${b.accent}">${b.icon}</div>
               <span class="hub-badge ${b.highlight ? "alert" : ""}">${b.badge}</span>
@@ -878,7 +935,7 @@ function renderHubView(container) {
             <h3>${b.title}</h3>
             <p>${b.desc}</p>
             <div class="hub-box-footer">
-              <span>فتح الصندوق</span>
+              <span>فتح</span>
               <span>${ICONS.arrowLeft}</span>
             </div>
           </article>
@@ -902,7 +959,7 @@ function renderSubHeader(title, subtitle, extraBtnHtml = "") {
   return `
     <div class="sub-page-top">
       <button type="button" class="crumb-btn" id="back-to-hub">${ICONS.arrowRight} الرئيسية (الصناديق)</button>
-      <div class="sub-banner glass-card">
+      <div class="sub-banner glass-card heritage-frame">
         <div>
           <h1>${title}</h1>
           <p>${subtitle}</p>
@@ -913,7 +970,7 @@ function renderSubHeader(title, subtitle, extraBtnHtml = "") {
   `;
 }
 
-/* ---------- 9.2 صندوق إدارة المحتوى والمواد + المحرر الأكاديمي ---------- */
+/* ---------- 10.2 صندوق إدارة المحتوى والمواد ---------- */
 function renderContentManager(container) {
   if (!hasPerm("manage_content")) return navigateAdmin("hub");
 
@@ -925,7 +982,7 @@ function renderContentManager(container) {
     <div class="container">
       ${renderSubHeader(
         "إدارة المحتوى والمواد",
-        "انشر كتباً، مصطلحات، أبحاثاً، محاضرات يوتيوب، وملفات PDF في أي قسم وفرع بمرونة كاملة.",
+        "انشر كتباً ومصطلحات ومحاضرات بحرية كاملة في إدراج الصور والوسائط والروابط.",
         `<button type="button" class="btn-primary-glass" id="btn-new-item">${ICONS.plus} إضافة مادة جديدة</button>`
       )}
 
@@ -1045,10 +1102,13 @@ function renderContentManager(container) {
 }
 
 /**
- * نافذة المحرر الأكاديمي الشامل (Word-like + ImgBB Compressor + YouTube + PDF)
+ * المحرر الأكاديمي الحر (رفع/لصق/سحب الصور + تحكم بالحجم والشرح + معاينة حية + حفظ تلقائي)
  */
 function openItemEditorModal(item = null) {
   const isEdit = Boolean(item);
+  const draftKey = `lisan_autosave_${item?.id || "new"}`;
+  const savedDraft = JSON.parse(localStorage.getItem(draftKey) || "null");
+
   const secs = Object.values(state.settings.sectionsMeta)
     .filter((s) => s.id !== "quiz")
     .sort((a, b) => a.order - b.order);
@@ -1058,6 +1118,16 @@ function openItemEditorModal(item = null) {
 
   openModal(isEdit ? "تعديل المادة" : "إضافة مادة جديدة", `
     <form id="item-editor-form" class="editor-form">
+      ${savedDraft ? `
+        <div class="draft-restore-bar" id="draft-restore-bar">
+          <span>توجد مسودة محفوظة تلقائياً (${formatDate(savedDraft.savedAt)}) — هل تود استعادتها؟</span>
+          <div class="form-actions-inline">
+            <button type="button" class="tool-btn" id="restore-draft-btn">استعادة المسودة</button>
+            <button type="button" class="tool-btn danger" id="discard-draft-btn">تجاهل</button>
+          </div>
+        </div>
+      ` : ""}
+
       <div class="form-grid-2">
         <div class="form-group">
           <label>القسم الرئيسي</label>
@@ -1089,10 +1159,14 @@ function openItemEditorModal(item = null) {
         <textarea id="ed-summary" rows="2" placeholder="وصف مكثف وواضح في سطرين...">${escapeHtml(item?.summary || "")}</textarea>
       </div>
 
-      <!-- المحرر الأكاديمي الشبيه بـ Word -->
+      <!-- المحرر الأكاديمي الحر الشبيه بـ Word -->
       <div class="form-group">
-        <label>المتن الأكاديمي (محرر نصوص متكامل — يتعرف على الروابط تلقائياً)</label>
-        <div class="word-editor-shell">
+        <div class="editor-label-row">
+          <label>المتن الأكاديمي (يمكنك لصق أو سحب أو رفع صور في أي سطر بحرية)</label>
+          <span id="autosave-indicator" class="autosave-badge">حفظ تلقائي نشط</span>
+        </div>
+
+        <div class="word-editor-shell" id="word-editor-shell">
           <div class="word-toolbar">
             <button type="button" data-cmd="formatBlock" data-val="H2" title="عنوان رئيسي">H2</button>
             <button type="button" data-cmd="formatBlock" data-val="H3" title="عنوان فرعي">H3</button>
@@ -1103,17 +1177,29 @@ function openItemEditorModal(item = null) {
             <button type="button" data-cmd="insertUnorderedList" title="قائمة نقطية">• قائمة</button>
             <button type="button" data-cmd="insertOrderedList" title="قائمة مرقمة">1. مرقمة</button>
             <button type="button" id="ed-insert-link" title="إدراج رابط">🔗 رابط</button>
-            <label class="toolbar-upload-btn" title="ضغط ورفع صورة داخل النص">
-              🖼 صورة
+            <label class="toolbar-upload-btn" title="رفع صورة مضغوطة في موضع المؤشر">
+              🖼 إدراج صورة هنا
               <input type="file" id="ed-inline-img-file" accept="image/*" hidden />
             </label>
             <button type="button" data-cmd="removeFormat" title="إزالة التنسيق">مسح التنسيق</button>
           </div>
-          <div id="ed-body-wysiwyg" class="word-canvas" contenteditable="true">${item?.bodyHtml || ""}</div>
+
+          <!-- شريط التحكم بالصورة المحددة داخل المحرر -->
+          <div id="img-props-bar" class="img-props-bar" hidden>
+            <span class="img-props-label">تنسيق الصورة المحددة:</span>
+            <button type="button" data-img-size="img-size-sm">صغيرة</button>
+            <button type="button" data-img-size="img-size-md">متوسطة</button>
+            <button type="button" data-img-size="img-size-full">كاملة العرض</button>
+            <button type="button" id="img-edit-caption-btn">تعديل الشرح</button>
+            <button type="button" id="img-delete-btn" class="danger-mini">حذف الصورة</button>
+          </div>
+
+          <div id="ed-body-wysiwyg" class="word-canvas" contenteditable="true"
+            data-placeholder="اكتب المحتوى الأكاديمي هنا... يمكنك لصق صورة (Ctrl+V) أو سحبها وإفلاتها في أي مكان داخل النص.">${item?.bodyHtml || ""}</div>
         </div>
       </div>
 
-      <!-- الوسائط المرفقة: غلاف مضغوط + يوتيوب + PDF + رابط خارجي -->
+      <!-- الوسائط المرفقة -->
       <div class="media-accordion-grid">
         <div class="form-group">
           <label>صورة الغلاف (ضغط تلقائي + رفع إلى ImgBB)</label>
@@ -1133,7 +1219,7 @@ function openItemEditorModal(item = null) {
         </div>
 
         <div class="form-group">
-          <label>رابط ملف PDF من Google Drive أو رابط مباشر (قارئ مدمج)</label>
+          <label>رابط ملف PDF من Google Drive أو رابط مباشر</label>
           <input type="url" id="ed-pdf-url" dir="ltr" value="${escapeHtml(item?.pdfUrl || "")}" placeholder="https://drive.google.com/file/d/..." />
         </div>
 
@@ -1158,27 +1244,72 @@ function openItemEditorModal(item = null) {
         </div>
       </div>
 
-      <div class="modal-footer-actions">
-        <button type="button" class="tool-btn" id="cancel-editor-btn">إلغاء</button>
-        <button type="submit" class="btn-primary-glass" id="save-item-btn">${isEdit ? "حفظ التعديلات" : "نشر وحفظ المادة"}</button>
+      <div class="modal-footer-actions split">
+        <button type="button" class="tool-btn" id="live-preview-btn">${ICONS.eye} معاينة حية قبل النشر</button>
+        <div class="form-actions-inline">
+          <button type="button" class="tool-btn" id="cancel-editor-btn">إلغاء</button>
+          <button type="submit" class="btn-primary-glass" id="save-item-btn">${isEdit ? "حفظ التعديلات" : "نشر وحفظ المادة"}</button>
+        </div>
       </div>
     </form>
   `, "wide");
 
-  // تحديث الفروع تلقائياً عند تغيير القسم
   const secSelect = document.getElementById("ed-section");
   const branchSelect = document.getElementById("ed-branch");
-  secSelect.addEventListener("change", () => {
-    const branches = state.settings.sectionsMeta[secSelect.value]?.branches || [];
-    branchSelect.innerHTML = branches.map((b) => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join("");
-  });
-
-  // أزرار محرر النصوص الشبيه بـ Word
   const canvas = document.getElementById("ed-body-wysiwyg");
+  const imgPropsBar = document.getElementById("img-props-bar");
+  const autoSaveBadge = document.getElementById("autosave-indicator");
+  let savedRange = null;
+
+  const updateBranchesList = (selectedBranch = "") => {
+    const branches = state.settings.sectionsMeta[secSelect.value]?.branches || [];
+    branchSelect.innerHTML = branches.map((b) =>
+      `<option value="${escapeHtml(b)}" ${b === selectedBranch ? "selected" : ""}>${escapeHtml(b)}</option>`
+    ).join("");
+  };
+  secSelect.addEventListener("change", () => updateBranchesList());
+
+  // حفظ موضع المؤشر لإدراج الصورة بدقة في المكان الذي يريده الكاتب
+  const saveCursorPosition = () => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && canvas.contains(sel.anchorNode)) {
+      savedRange = sel.getRangeAt(0).cloneRange();
+    }
+  };
+  canvas.addEventListener("keyup", saveCursorPosition);
+  canvas.addEventListener("mouseup", saveCursorPosition);
+
+  // إدراج صورة مضغوطة كـ <figure> أكاديمي قابل لتعديل الحجم والشرح
+  const insertUploadedFigure = async (file) => {
+    try {
+      showToast("جارٍ ضغط الصورة وإدراجها في مكانها...");
+      const url = await uploadCompressedImageToImgBB(file);
+      const figureHtml = `
+        <figure class="academic-figure img-size-full">
+          <img src="${escapeHtml(url)}" alt="صورة توضيحية" class="academic-inline-img" />
+          <figcaption>انقر على الصورة لتعديل حجمها أو هذا الشرح التوضيحي</figcaption>
+        </figure><p><br></p>
+      `;
+      canvas.focus();
+      if (savedRange) {
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(savedRange);
+      }
+      document.execCommand("insertHTML", false, figureHtml);
+      triggerAutoSave();
+      showToast("تم إدراج الصورة بنجاح — انقر عليها للتحكم بحجمها ✓");
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+  };
+
+  // أزرار شريط Word
   document.querySelectorAll(".word-toolbar [data-cmd]").forEach((btn) => {
     btn.addEventListener("click", () => {
       canvas.focus();
       document.execCommand(btn.dataset.cmd, false, btn.dataset.val || null);
+      triggerAutoSave();
     });
   });
 
@@ -1187,25 +1318,157 @@ function openItemEditorModal(item = null) {
     if (url) {
       canvas.focus();
       document.execCommand("createLink", false, url);
+      triggerAutoSave();
     }
   });
 
-  // رفع صورة مضغوطة داخل متن المقال
+  // رفع صورة عبر الزر في الشريط
   document.getElementById("ed-inline-img-file")?.addEventListener("change", async (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      showToast("جارٍ ضغط الصورة وإدراجها في المقال...");
-      const url = await uploadCompressedImageToImgBB(file);
-      canvas.focus();
-      document.execCommand("insertImage", false, url);
-      showToast("تم إدراج الصورة بنجاح ✓");
-    } catch (err) {
-      showToast(err.message, "error");
+    e.target.value = "";
+    if (file) await insertUploadedFigure(file);
+  });
+
+  // دعم اللصق المباشر للصور (Ctrl+V) داخل المحرر
+  canvas.addEventListener("paste", async (e) => {
+    const items = Array.from(e.clipboardData?.items || []);
+    const imgItem = items.find((i) => i.type.startsWith("image/"));
+    if (imgItem) {
+      e.preventDefault();
+      const file = imgItem.getAsFile();
+      if (file) await insertUploadedFigure(file);
     }
   });
 
-  // رفع صورة الغلاف مضغوطة إلى ImgBB
+  // دعم السحب والإفلات للصور (Drag & Drop) داخل المحرر
+  canvas.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    canvas.classList.add("drag-active");
+  });
+  canvas.addEventListener("dragleave", () => canvas.classList.remove("drag-active"));
+  canvas.addEventListener("drop", async (e) => {
+    canvas.classList.remove("drag-active");
+    const file = Array.from(e.dataTransfer?.files || []).find((f) => f.type.startsWith("image/"));
+    if (file) {
+      e.preventDefault();
+      await insertUploadedFigure(file);
+    }
+  });
+
+  // شريط التحكم بالصورة عند النقر على أي صورة داخل المحرر
+  canvas.addEventListener("click", (e) => {
+    const img = e.target.closest("img");
+    if (img) {
+      let fig = img.closest("figure");
+      if (!fig) {
+        fig = document.createElement("figure");
+        fig.className = "academic-figure img-size-full";
+        img.parentNode.insertBefore(fig, img);
+        fig.appendChild(img);
+      }
+      canvas.querySelectorAll(".selected-fig").forEach((el) => el.classList.remove("selected-fig"));
+      fig.classList.add("selected-fig");
+      state.selectedEditorFigure = fig;
+      imgPropsBar.hidden = false;
+    } else if (!e.target.closest("#img-props-bar")) {
+      canvas.querySelectorAll(".selected-fig").forEach((el) => el.classList.remove("selected-fig"));
+      state.selectedEditorFigure = null;
+      imgPropsBar.hidden = true;
+    }
+  });
+
+  imgPropsBar?.querySelectorAll("[data-img-size]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const fig = state.selectedEditorFigure;
+      if (!fig) return;
+      fig.classList.remove("img-size-sm", "img-size-md", "img-size-full");
+      fig.classList.add(btn.dataset.imgSize);
+      triggerAutoSave();
+      showToast("تم تغيير حجم الصورة ✓");
+    });
+  });
+
+  document.getElementById("img-edit-caption-btn")?.addEventListener("click", () => {
+    const fig = state.selectedEditorFigure;
+    if (!fig) return;
+    let cap = fig.querySelector("figcaption");
+    const nextText = prompt("اكتب الشرح التوضيحي أسفل الصورة (اتركه فارغاً لإزالته):", cap?.textContent || "");
+    if (nextText === null) return;
+    if (nextText.trim()) {
+      if (!cap) {
+        cap = document.createElement("figcaption");
+        fig.appendChild(cap);
+      }
+      cap.textContent = nextText.trim();
+    } else if (cap) {
+      cap.remove();
+    }
+    triggerAutoSave();
+  });
+
+  document.getElementById("img-delete-btn")?.addEventListener("click", () => {
+    if (state.selectedEditorFigure) {
+      state.selectedEditorFigure.remove();
+      state.selectedEditorFigure = null;
+      imgPropsBar.hidden = true;
+      triggerAutoSave();
+    }
+  });
+
+  // الحفظ التلقائي للمسودات
+  const collectFormSnapshot = () => ({
+    sectionId: secSelect.value,
+    branch: branchSelect.value,
+    title: document.getElementById("ed-title").value,
+    subtitle: document.getElementById("ed-subtitle").value,
+    summary: document.getElementById("ed-summary").value,
+    bodyHtml: canvas.innerHTML,
+    coverUrl: document.getElementById("ed-cover-url").value,
+    youtubeUrl: document.getElementById("ed-youtube-url").value,
+    pdfUrl: document.getElementById("ed-pdf-url").value,
+    externalUrl: document.getElementById("ed-external-url").value,
+    tags: document.getElementById("ed-tags").value,
+    status: document.getElementById("ed-status").value,
+    savedAt: new Date().toISOString()
+  });
+
+  const triggerAutoSave = () => {
+    clearTimeout(state.draftTimer);
+    if (autoSaveBadge) autoSaveBadge.textContent = "جارٍ الحفظ التلقائي...";
+    state.draftTimer = setTimeout(() => {
+      try {
+        localStorage.setItem(draftKey, JSON.stringify(collectFormSnapshot()));
+        if (autoSaveBadge) autoSaveBadge.textContent = "تم الحفظ التلقائي ✓";
+      } catch {}
+    }, 900);
+  };
+
+  document.getElementById("item-editor-form")?.addEventListener("input", triggerAutoSave);
+
+  document.getElementById("restore-draft-btn")?.addEventListener("click", () => {
+    if (!savedDraft) return;
+    secSelect.value = savedDraft.sectionId || initialSecId;
+    updateBranchesList(savedDraft.branch || "");
+    document.getElementById("ed-title").value = savedDraft.title || "";
+    document.getElementById("ed-subtitle").value = savedDraft.subtitle || "";
+    document.getElementById("ed-summary").value = savedDraft.summary || "";
+    canvas.innerHTML = savedDraft.bodyHtml || "";
+    document.getElementById("ed-cover-url").value = savedDraft.coverUrl || "";
+    document.getElementById("ed-youtube-url").value = savedDraft.youtubeUrl || "";
+    document.getElementById("ed-pdf-url").value = savedDraft.pdfUrl || "";
+    document.getElementById("ed-external-url").value = savedDraft.externalUrl || "";
+    document.getElementById("ed-tags").value = savedDraft.tags || "";
+    document.getElementById("ed-status").value = savedDraft.status || "published";
+    document.getElementById("draft-restore-bar")?.remove();
+    showToast("تمت استعادة المسودة بنجاح ✓");
+  });
+
+  document.getElementById("discard-draft-btn")?.addEventListener("click", () => {
+    localStorage.removeItem(draftKey);
+    document.getElementById("draft-restore-bar")?.remove();
+  });
+
+  // رفع الغلاف
   document.getElementById("ed-cover-file")?.addEventListener("change", async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1213,10 +1476,17 @@ function openItemEditorModal(item = null) {
     try {
       const url = await uploadCompressedImageToImgBB(file, statusEl);
       document.getElementById("ed-cover-url").value = url;
+      triggerAutoSave();
     } catch (err) {
       statusEl.textContent = err.message;
       showToast(err.message, "error");
     }
+  });
+
+  // زر المعاينة الحية قبل النشر
+  document.getElementById("live-preview-btn")?.addEventListener("click", () => {
+    const snap = collectFormSnapshot();
+    openLivePreviewModal(snap);
   });
 
   document.getElementById("cancel-editor-btn")?.addEventListener("click", closeModal);
@@ -1227,9 +1497,10 @@ function openItemEditorModal(item = null) {
     saveBtn.disabled = true;
     saveBtn.textContent = "جارٍ الحفظ...";
 
-    const tagsRaw = document.getElementById("ed-tags").value;
-    const tags = tagsRaw.split(/[,،]+/).map((t) => t.trim()).filter(Boolean);
+    // تنظيف كلاس التحديد المؤقت من الصور قبل الحفظ
+    canvas.querySelectorAll(".selected-fig").forEach((el) => el.classList.remove("selected-fig"));
 
+    const tags = document.getElementById("ed-tags").value.split(/[,،]+/).map((t) => t.trim()).filter(Boolean);
     const payload = {
       sectionId: secSelect.value,
       branch: branchSelect.value || "",
@@ -1263,6 +1534,7 @@ function openItemEditorModal(item = null) {
         await logActivity("إضافة مادة جديدة", payload.title);
         showToast("تم نشر المادة بنجاح ✓");
       }
+      localStorage.removeItem(draftKey);
       closeModal();
       renderAdminView();
     } catch (err) {
@@ -1274,7 +1546,34 @@ function openItemEditorModal(item = null) {
   });
 }
 
-/* ---------- 9.3 صندوق بنك الاختبارات التفاعلية ---------- */
+function openLivePreviewModal(snap) {
+  const backdrop = document.getElementById("preview-modal-backdrop");
+  const body = document.getElementById("preview-modal-body");
+  if (!backdrop || !body) return;
+  const secTitle = state.settings.sectionsMeta[snap.sectionId]?.title || "";
+
+  body.innerHTML = `
+    <div class="preview-article">
+      <div class="row-badges" style="margin-bottom:12px">
+        <span class="pill-badge">${escapeHtml(secTitle)}</span>
+        <span class="pill-badge neutral">${escapeHtml(snap.branch || "")}</span>
+      </div>
+      <h1 class="preview-title">${escapeHtml(snap.title || "بدون عنوان بعد")}</h1>
+      ${snap.subtitle ? `<p class="preview-sub">${escapeHtml(snap.subtitle)}</p>` : ""}
+      ${snap.summary ? `<p class="preview-lead">${escapeHtml(snap.summary)}</p>` : ""}
+      ${snap.coverUrl ? `<img src="${escapeHtml(snap.coverUrl)}" alt="" class="preview-cover" />` : ""}
+      <div class="preview-prose">${snap.bodyHtml || "<p style='color:var(--text-muted)'>لم يُكتب نص بعد...</p>"}</div>
+    </div>
+  `;
+  backdrop.hidden = false;
+}
+
+function closeLivePreviewModal() {
+  const backdrop = document.getElementById("preview-modal-backdrop");
+  if (backdrop) backdrop.hidden = true;
+}
+
+/* ---------- 10.3 صندوق بنك الاختبارات التفاعلية ---------- */
 function renderQuizzesManager(container) {
   if (!hasPerm("manage_quizzes")) return navigateAdmin("hub");
 
@@ -1447,7 +1746,7 @@ function openQuizEditorModal(quiz = null) {
             </select>
           </div>
           <div class="form-group">
-            <label>الشرح اللساني للإجابة (يظهر للطالب)</label>
+            <label>الشرح اللساني للإجابة</label>
             <input type="text" class="qb-exp" value="${escapeHtml(q.explanation || "")}" placeholder="تفسير مختصر..." />
           </div>
         </div>
@@ -1512,7 +1811,7 @@ function openQuizEditorModal(quiz = null) {
   renderQuestionsBuilder();
 }
 
-/* ---------- 9.4 صندوق مراجعة واعتماد مساهمات الطلبة ---------- */
+/* ---------- 10.4 صندوق مراجعة مساهمات الطلبة ---------- */
 function renderSubmissionsQueue(container) {
   if (!hasPerm("approve_submissions")) return navigateAdmin("hub");
   const pending = state.items.filter((x) => x.status === "pending");
@@ -1579,7 +1878,7 @@ function renderSubmissionsQueue(container) {
   });
 }
 
-/* ---------- 9.5 صندوق إدارة الأقسام الستة وفروعها بمرونة كاملة ---------- */
+/* ---------- 10.5 صندوق الأقسام الستة وفروعها ---------- */
 function renderSectionsManager(container) {
   if (!hasPerm("manage_sections")) return navigateAdmin("hub");
   const secs = Object.values(state.settings.sectionsMeta).sort((a, b) => a.order - b.order);
@@ -1628,10 +1927,7 @@ function renderSectionsManager(container) {
 
     container.querySelectorAll("[data-sec-card]").forEach((card) => {
       const id = card.dataset.secCard;
-      const branches = card.querySelector(".se-branches").value
-        .split("\n")
-        .map((x) => x.trim())
-        .filter(Boolean);
+      const branches = card.querySelector(".se-branches").value.split("\n").map((x) => x.trim()).filter(Boolean);
       state.settings.sectionsMeta[id] = {
         ...state.settings.sectionsMeta[id],
         title: card.querySelector(".se-title").value.trim(),
@@ -1655,7 +1951,7 @@ function renderSectionsManager(container) {
   });
 }
 
-/* ---------- 9.6 صندوق مفاتيح التحكم الشامل بالميزات (Feature Flags) ---------- */
+/* ---------- 10.6 صندوق مفاتيح الميزات والظهور (Feature Flags) ---------- */
 function renderFeaturesManager(container) {
   if (!hasPerm("manage_features")) return navigateAdmin("hub");
 
@@ -1704,7 +2000,59 @@ function renderFeaturesManager(container) {
   });
 }
 
-/* ---------- 9.7 صندوق هوية المنصة والإعدادات العامة الشاملة ---------- */
+/* ---------- 10.7 صندوق هوية المنصة + مولّد خريطة الموقع للسيو (sitemap.xml) ---------- */
+function buildSitemapXml(baseUrlRaw) {
+  const cleanBase = (baseUrlRaw || "https://example.com").trim().replace(/\/+$/, "");
+  const today = new Date().toISOString().split("T")[0];
+  const urls = [{ loc: `${cleanBase}/`, priority: "1.0", changefreq: "daily", lastmod: today }];
+
+  const enabledSecs = Object.values(state.settings.sectionsMeta)
+    .filter((s) => state.settings.features[s.featureKey] !== false)
+    .sort((a, b) => a.order - b.order);
+
+  enabledSecs.forEach((sec) => {
+    urls.push({
+      loc: `${cleanBase}/?section=${encodeURIComponent(sec.id)}`,
+      priority: "0.9",
+      changefreq: "weekly",
+      lastmod: today
+    });
+  });
+
+  state.items
+    .filter((it) => !it.status || it.status === "published")
+    .forEach((it) => {
+      const d = (it.updatedAt || it.createdAt || today).slice(0, 10);
+      urls.push({
+        loc: `${cleanBase}/?section=${encodeURIComponent(it.sectionId || "library")}&amp;item=${encodeURIComponent(it.id)}`,
+        priority: "0.8",
+        changefreq: "monthly",
+        lastmod: /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : today
+      });
+    });
+
+  state.quizzes
+    .filter((q) => !q.status || q.status === "published")
+    .forEach((q) => {
+      const d = (q.updatedAt || q.createdAt || today).slice(0, 10);
+      urls.push({
+        loc: `${cleanBase}/?section=quiz&amp;quiz=${encodeURIComponent(q.id)}`,
+        priority: "0.75",
+        changefreq: "monthly",
+        lastmod: /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : today
+      });
+    });
+
+  const body = urls.map((u) => `  <url>
+    <loc>${u.loc}</loc>
+    <lastmod>${u.lastmod}</lastmod>
+    <changefreq>${u.changefreq}</changefreq>
+    <priority>${u.priority}</priority>
+  </url>`).join("\n");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>`;
+}
+
 function renderSettingsManager(container) {
   if (!hasPerm("manage_settings")) return navigateAdmin("hub");
   const s = state.settings;
@@ -1712,8 +2060,8 @@ function renderSettingsManager(container) {
   container.innerHTML = `
     <div class="container">
       ${renderSubHeader(
-        "هوية المنصة والإعدادات الشاملة",
-        "غيّر كل نص، شعار، لون، إعلان علوي، أو رابط تواصل في المنصة العامة بدون لمس الكود."
+        "هوية المنصة وخريطة الفهرسة (SEO)",
+        "أي تغيير في الشعار أو اللون هنا ينعكس فوراً على الموقع العام وغرفة العمليات معاً."
       )}
 
       <form id="global-settings-form" class="glass-card settings-form-card">
@@ -1739,13 +2087,13 @@ function renderSettingsManager(container) {
             <input type="text" id="set-badge" value="${escapeHtml(s.audienceBadge)}" />
           </div>
           <div class="form-group">
-            <label>اللون الأساسي للمنصة (Accent Color)</label>
+            <label>اللون الأساسي للمنصة (ينعكس على المستودعين فوراً)</label>
             <input type="color" id="set-accent" class="color-input" value="${escapeHtml(s.themeAccent || "#0071e3")}" />
           </div>
         </div>
 
         <div class="form-group">
-          <label>شعار المنصة (صورة — ضغط تلقائي ورفع إلى ImgBB)</label>
+          <label>شعار المنصة (يتغير في الموقع العام ولوحة التحكم معاً)</label>
           <div class="upload-row">
             <input type="url" id="set-logo" dir="ltr" value="${escapeHtml(s.logoUrl || "")}" placeholder="رابط الشعار (اتركه فارغاً لحرف ل الافتراضي)" />
             <label class="tool-btn upload-trigger">
@@ -1793,9 +2141,35 @@ function renderSettingsManager(container) {
         </div>
 
         <div class="modal-footer-actions">
-          <button type="submit" class="btn-primary-glass" id="save-settings-btn">حفظ جميع الإعدادات</button>
+          <button type="submit" class="btn-primary-glass" id="save-settings-btn">حفظ وتطبيق الهوية فوراً</button>
         </div>
       </form>
+
+      <!-- مولّد خريطة الموقع لمحركات البحث (sitemap.xml) -->
+      <section class="glass-card settings-form-card" style="margin-top: 22px">
+        <div class="sitemap-head">
+          <div>
+            <h3 style="margin:0 0 4px">${ICONS.globe} مولّد خريطة الموقع للسيو (sitemap.xml)</h3>
+            <p class="helper-hint" style="margin:0">يجمع كل روابط الأقسام والمواد والاختبارات المنشورة تلقائياً لتقديمها لـ Google Search Console.</p>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 16px">
+          <label>رابط الدومين الرسمي للمنصة العامة (عند ربطه أو رابط Cloudflare Pages الحالي)</label>
+          <div class="upload-row">
+            <input type="url" id="seo-base-url" dir="ltr" value="${escapeHtml(s.publicBaseUrl || "")}" placeholder="https://lisan-platform.com" />
+            <button type="button" class="btn-primary-glass" id="generate-sitemap-btn">توليد الخريطة</button>
+          </div>
+        </div>
+
+        <div id="sitemap-output-wrap" hidden>
+          <textarea id="sitemap-xml-output" rows="10" dir="ltr" readonly class="code-textarea"></textarea>
+          <div class="form-actions-inline" style="margin-top: 10px">
+            <button type="button" class="tool-btn" id="copy-sitemap-btn">نسخ كود sitemap.xml</button>
+            <button type="button" class="btn-primary-glass" id="download-sitemap-btn">تحميل ملف sitemap.xml</button>
+          </div>
+        </div>
+      </section>
     </div>
   `;
 
@@ -1806,7 +2180,7 @@ function renderSettingsManager(container) {
     if (!file) return;
     const statusEl = document.getElementById("set-logo-status");
     try {
-      const url = await uploadCompressedImageToImgBB(file, statusEl);
+      const url = await uploadCompressedImageToImgBB(file, statusEl, 512);
       document.getElementById("set-logo").value = url;
     } catch (err) {
       statusEl.textContent = err.message;
@@ -1831,6 +2205,7 @@ function renderSettingsManager(container) {
       announcementText: document.getElementById("set-announcement").value.trim(),
       footerText: document.getElementById("set-footer").value.trim(),
       contactEmail: document.getElementById("set-email").value.trim(),
+      publicBaseUrl: document.getElementById("seo-base-url")?.value.trim() || state.settings.publicBaseUrl || "",
       socialLinks: {
         facebook: document.getElementById("set-fb").value.trim(),
         telegram: document.getElementById("set-tg").value.trim(),
@@ -1841,20 +2216,57 @@ function renderSettingsManager(container) {
 
     try {
       await setDoc(doc(db, "settings", "global"), state.settings, { merge: true });
-      document.documentElement.style.setProperty("--accent", state.settings.themeAccent);
-      await logActivity("تحديث الإعدادات العامة", state.settings.siteName);
-      showToast("تم تحديث هوية المنصة بنجاح ✓");
+      applyAdminBranding(); // المرآة الفورية في غرفة العمليات
+      await logActivity("تحديث هوية المنصة", state.settings.siteName);
+      showToast("تم تحديث الهوية والشعار واللون في المستودعين بنجاح ✓");
     } catch (err) {
       console.error(err);
       showToast("تعذر حفظ الإعدادات", "error");
     } finally {
       btn.disabled = false;
-      btn.textContent = "حفظ جميع الإعدادات";
+      btn.textContent = "حفظ وتطبيق الهوية فوراً";
     }
+  });
+
+  // مولّد خريطة sitemap.xml
+  document.getElementById("generate-sitemap-btn")?.addEventListener("click", async () => {
+    const baseInput = document.getElementById("seo-base-url").value.trim();
+    if (!/^https?:\/\//i.test(baseInput)) {
+      showToast("أدخل رابط الموقع العام يبدأ بـ https:// أولاً", "error");
+      return;
+    }
+    state.settings.publicBaseUrl = baseInput;
+    setDoc(doc(db, "settings", "global"), { publicBaseUrl: baseInput }, { merge: true }).catch(() => {});
+
+    const xml = buildSitemapXml(baseInput);
+    const out = document.getElementById("sitemap-xml-output");
+    out.value = xml;
+    document.getElementById("sitemap-output-wrap").hidden = false;
+    showToast("تم توليد خريطة الموقع بالكامل جاهزة للفهرسة ✓");
+  });
+
+  document.getElementById("copy-sitemap-btn")?.addEventListener("click", async () => {
+    const xml = document.getElementById("sitemap-xml-output")?.value || "";
+    try {
+      await navigator.clipboard.writeText(xml);
+      showToast("تم نسخ كود sitemap.xml بنجاح ✓");
+    } catch {
+      showToast("حدد النص وانسخه يدوياً");
+    }
+  });
+
+  document.getElementById("download-sitemap-btn")?.addEventListener("click", () => {
+    const xml = document.getElementById("sitemap-xml-output")?.value || "";
+    const blob = new Blob([xml], { type: "application/xml;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "sitemap.xml";
+    a.click();
+    URL.revokeObjectURL(a.href);
   });
 }
 
-/* ---------- 9.8 صندوق إدارة الفريق والصلاحيات الدقيقة (Checkboxes) ---------- */
+/* ---------- 10.8 صندوق فريق الإدارة والصلاحيات (مع الصورة والنبذة والبحث الذكي فيها) ---------- */
 function renderAdminsManager(container) {
   if (!hasPerm("manage_admins")) return navigateAdmin("hub");
 
@@ -1862,14 +2274,16 @@ function renderAdminsManager(container) {
     <div class="container">
       ${renderSubHeader(
         "فريق الإدارة والصلاحيات المرنة",
-        "أضف مشرفين وحدد بدقة ما يستطيع كل شخص فعله عبر مربعات الاختيار، مع ضمان عدم تكرار أسماء المستخدمين.",
+        "أضف موظفين بصورهم ونبذهم التعريفية؛ البحث الذكي يلتقط أي كلمة من الاسم أو النبذة فوراً.",
         `<button type="button" class="btn-primary-glass" id="btn-new-admin">${ICONS.plus} إضافة مشرف جديد</button>`
       )}
 
       <div class="glass-panel filter-toolbar">
         <div class="local-search-box full-flex">
           <span>${ICONS.search}</span>
-          <input type="search" id="admin-search-input" placeholder="ابحث عن مشرف بالاسم أو اسم المستخدم..." value="${escapeHtml(state.filters.adminSearch)}" />
+          <input type="search" id="admin-search-input"
+            placeholder="ابحث بالاسم، اسم المستخدم، أو أي كلمة من نبذة الموظف (مثل: معجم، أصوات، ماستر)..."
+            value="${escapeHtml(state.filters.adminSearch)}" />
         </div>
       </div>
 
@@ -1881,21 +2295,30 @@ function renderAdminsManager(container) {
   document.getElementById("btn-new-admin")?.addEventListener("click", () => openAdminEditorModal(null));
 
   const paint = () => {
-    const list = smartFilter(state.admins, state.filters.adminSearch, (a) => `${a.displayName || ""} ${a.username}`);
+    // البحث الذكي يلتقط من الاسم + اسم المستخدم + النبذة التعريفية
+    const list = smartFilter(state.admins, state.filters.adminSearch, (a) =>
+      `${a.displayName || ""} ${a.username || ""} ${a.bio || ""}`
+    );
     const wrap = document.getElementById("admins-list-wrap");
+    if (!list.length) {
+      wrap.innerHTML = `<div class="glass-card empty-state"><p>لم يُعثر على موظف مطابق في الاسم أو النبذة التعريفية.</p></div>`;
+      return;
+    }
+
     wrap.innerHTML = list.map((ad) => `
       <div class="glass-card admin-row-card">
-        <div class="row-thumb placeholder">${escapeHtml((ad.displayName || ad.username || "A")[0])}</div>
+        ${renderAvatarHtml(ad.avatarUrl, ad.displayName || ad.username, "md")}
         <div class="row-main">
           <div class="row-badges">
-            <span class="pill-badge">${ad.isSuperAdmin ? "أدمن رئيسي (كامل الصلاحيات)" : `${(ad.permissions || []).length} صلاحيات محددة`}</span>
+            <span class="pill-badge">${ad.isSuperAdmin ? "أدمن رئيسي (كامل الصلاحيات)" : `${(ad.permissions || []).length} صلاحيات`}</span>
             <span class="status-dot ${ad.active !== false ? "published" : "draft"}">${ad.active !== false ? "نشط" : "موقوف"}</span>
           </div>
           <h3>${escapeHtml(ad.displayName || ad.username)}</h3>
-          <p dir="ltr" style="text-align:right">اسم المستخدم: <strong>${escapeHtml(ad.username)}</strong></p>
+          <p class="admin-meta-line">اسم المستخدم: <strong dir="ltr">${escapeHtml(ad.username)}</strong></p>
+          ${ad.bio ? `<p class="admin-bio-line">${escapeHtml(ad.bio)}</p>` : ""}
         </div>
         <div class="row-actions">
-          <button type="button" class="tool-btn" data-edit-admin="${ad.id}">${ICONS.edit} تعديل الصلاحيات</button>
+          <button type="button" class="tool-btn" data-edit-admin="${ad.id}">${ICONS.edit} تعديل</button>
           ${!ad.isSuperAdmin ? `<button type="button" class="tool-btn danger" data-del-admin="${ad.id}">${ICONS.trash} حذف</button>` : ""}
         </div>
       </div>
@@ -1934,22 +2357,42 @@ function openAdminEditorModal(admin = null) {
   const isEdit = Boolean(admin);
   const currentPerms = new Set(admin?.permissions || []);
 
-  openModal(isEdit ? `تعديل حساب: ${admin.username}` : "إضافة مشرف جديد", `
+  openModal(isEdit ? `تعديل حساب: ${admin.displayName || admin.username}` : "إضافة مشرف جديد", `
     <form id="admin-user-form" class="editor-form">
       <div class="tip-banner">
-        <strong>نصيحة احترافية:</strong> يُفضل وضع <strong>البريد الإلكتروني أو رقم الهاتف</strong> كاسم مستخدم للموظف حتى يسهل تذكره ولا يتشابه مع غيره.
+        <strong>نصيحة احترافية:</strong> ضع <strong>البريد الإلكتروني أو رقم الهاتف</strong> كاسم مستخدم، وأضف كلمات وصفية في <strong>نبذة الموظف</strong> لتسهيل العثور عليه بالبحث الذكي لاحقاً.
+      </div>
+
+      <div class="avatar-editor-row">
+        <div id="adm-avatar-preview">${renderAvatarHtml(admin?.avatarUrl, admin?.displayName || "م", "lg")}</div>
+        <div class="form-group" style="flex:1; margin:0">
+          <label>الصورة الشخصية للموظف (اختياري — يمكن للموظف تغييرها لاحقاً)</label>
+          <div class="upload-row">
+            <input type="url" id="adm-avatar-url" dir="ltr" value="${escapeHtml(admin?.avatarUrl || "")}" placeholder="رابط الصورة أو ارفع صورة..." />
+            <label class="tool-btn upload-trigger">
+              ${ICONS.upload} رفع صورة
+              <input type="file" id="adm-avatar-file" accept="image/*" hidden />
+            </label>
+          </div>
+          <small id="adm-avatar-status" class="helper-hint"></small>
+        </div>
       </div>
 
       <div class="form-grid-2">
         <div class="form-group">
           <label>الاسم الظاهر *</label>
-          <input type="text" id="adm-display" required value="${escapeHtml(admin?.displayName || "")}" placeholder="مثال: أ. سارة — محررة المعجم" />
+          <input type="text" id="adm-display" required value="${escapeHtml(admin?.displayName || "")}" placeholder="مثال: أ. سارة بن علي" />
         </div>
         <div class="form-group">
           <label>اسم المستخدم (فريد لا يتكرر) *</label>
           <input type="text" id="adm-username" required dir="ltr" value="${escapeHtml(admin?.username || "")}" placeholder="sara@lisan.org أو 05..." />
           <small id="username-check-hint" class="helper-hint"></small>
         </div>
+      </div>
+
+      <div class="form-group">
+        <label>نبذة تعريفية عن الموظف ومهامه (مفهرسة في البحث الذكي)</label>
+        <textarea id="adm-bio" rows="2" placeholder="مثال: مسؤولة قسم المعجم اللساني والتداولية — جامعة الجزائر — مراجعة الكتب والأبحاث...">${escapeHtml(admin?.bio || "")}</textarea>
       </div>
 
       <div class="form-grid-2">
@@ -1991,8 +2434,23 @@ function openAdminEditorModal(admin = null) {
 
   const usernameInput = document.getElementById("adm-username");
   const hintEl = document.getElementById("username-check-hint");
+  const avatarUrlInput = document.getElementById("adm-avatar-url");
+  const avatarPreview = document.getElementById("adm-avatar-preview");
 
-  // فحص لحظي لعدم تشابه أسماء المستخدمين
+  document.getElementById("adm-avatar-file")?.addEventListener("change", async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const statusEl = document.getElementById("adm-avatar-status");
+    try {
+      const url = await uploadCompressedImageToImgBB(file, statusEl, 512);
+      avatarUrlInput.value = url;
+      avatarPreview.innerHTML = renderAvatarHtml(url, document.getElementById("adm-display").value || "م", "lg");
+    } catch (err) {
+      statusEl.textContent = err.message;
+      showToast(err.message, "error");
+    }
+  });
+
   const isDuplicateUsername = (val) => {
     const lower = val.trim().toLowerCase();
     return state.admins.some((a) => a.usernameLower === lower && a.id !== admin?.id);
@@ -2018,11 +2476,9 @@ function openAdminEditorModal(admin = null) {
     const usernameLower = username.toLowerCase();
 
     if (isDuplicateUsername(username)) {
-      showToast("هذا اسم مستخدم مسجل لدينا! يرجى اختيار اسم مستخدم مختلف.", "error");
+      showToast("هذا اسم مستخدم مسجل لدينا! يرجى اختيار اسم مختلف.", "error");
       return;
     }
-
-    // فحص مباشر إضافي ضد Firestore لضمان التفرد التام
     const existing = await findAdminByUsername(username);
     if (existing && existing.id !== admin?.id) {
       showToast("هذا اسم مستخدم مسجل لدينا بالفعل!", "error");
@@ -2041,22 +2497,25 @@ function openAdminEditorModal(admin = null) {
       displayName: document.getElementById("adm-display").value.trim(),
       username,
       usernameLower,
+      avatarUrl: avatarUrlInput.value.trim(),
+      bio: document.getElementById("adm-bio").value.trim(),
       active: admin?.isSuperAdmin ? true : document.getElementById("adm-active").value === "true",
       permissions: selectedPerms,
       updatedAt: new Date().toISOString()
     };
 
-    if (newPass) {
-      payload.passwordHash = await sha256(newPass);
-    }
+    if (newPass) payload.passwordHash = await sha256(newPass);
 
     try {
       if (isEdit) {
         await updateDoc(doc(db, "admins", admin.id), payload);
         const idx = state.admins.findIndex((x) => x.id === admin.id);
         if (idx >= 0) state.admins[idx] = { ...state.admins[idx], ...payload };
-        if (state.currentUser.id === admin.id) state.currentUser = { ...state.currentUser, ...payload };
-        await logActivity("تعديل صلاحيات مشرف", username);
+        if (state.currentUser.id === admin.id) {
+          state.currentUser = { ...state.currentUser, ...payload };
+          applyAdminBranding();
+        }
+        await logActivity("تعديل بيانات مشرف", username);
         showToast("تم تحديث بيانات المشرف ✓");
       } else {
         payload.isSuperAdmin = false;
@@ -2077,17 +2536,52 @@ function openAdminEditorModal(admin = null) {
   });
 }
 
-/* ---------- 9.9 صندوق حسابي والأمان + سجل العمليات ---------- */
+/* ---------- 10.9 صندوق حسابي (تعديل الصورة والاسم والنبذة) + الأمان + السجلات ---------- */
 function renderSecurityAndLogs(container) {
   const trusted = getTrustedDevice();
   const isThisTrusted = trusted?.adminId === state.currentUser.id;
+  const me = state.currentUser;
 
   container.innerHTML = `
     <div class="container">
       ${renderSubHeader(
-        "حسابي، الأمان، وسجل العمليات",
-        "تحكم بأمان متصفحك الموثوق، الرمز السريع (4 أرقام)، كلمة المرور، وراقب سجل النشاطات."
+        "ملفي الشخصي، الأمان، والسجلات",
+        "عدّل صورتك الشخصية واسمك ونبذتك التعريفية، واضبط الرمز السريع وكلمة المرور."
       )}
+
+      <!-- بطاقة تعديل الملف الشخصي للموظف بنفسه -->
+      <form id="self-profile-form" class="glass-card settings-form-card" style="margin-bottom: 20px">
+        <h3 style="margin-top:0">ملفي الشخصي</h3>
+        <div class="avatar-editor-row">
+          <div id="self-avatar-preview">${renderAvatarHtml(me.avatarUrl, me.displayName || me.username, "lg")}</div>
+          <div class="form-group" style="flex:1; margin:0">
+            <label>صورتي الشخصية (تُضغط وتُرفع تلقائياً)</label>
+            <div class="upload-row">
+              <input type="url" id="self-avatar-url" dir="ltr" value="${escapeHtml(me.avatarUrl || "")}" placeholder="رابط الصورة أو ارفع من جهازك..." />
+              <label class="tool-btn upload-trigger">
+                ${ICONS.upload} رفع صورة
+                <input type="file" id="self-avatar-file" accept="image/*" hidden />
+              </label>
+            </div>
+            <small id="self-avatar-status" class="helper-hint"></small>
+          </div>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label>الاسم الظاهر</label>
+            <input type="text" id="self-display" required value="${escapeHtml(me.displayName || "")}" />
+          </div>
+          <div class="form-group">
+            <label>اسم المستخدم (للدخول)</label>
+            <input type="text" dir="ltr" value="${escapeHtml(me.username)}" disabled />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>نبذتي التعريفية (مفهرسة للبحث السريع بين الفريق)</label>
+          <textarea id="self-bio" rows="2" placeholder="اكتب تخصصك أو مهامك في المنصة...">${escapeHtml(me.bio || "")}</textarea>
+        </div>
+        <button type="submit" class="btn-primary-glass" id="save-self-profile-btn">حفظ ملفي الشخصي</button>
+      </form>
 
       <div class="security-grid">
         <div class="glass-card settings-form-card">
@@ -2101,13 +2595,13 @@ function renderSecurityAndLogs(container) {
             </div>
             <div class="form-actions-inline">
               <button type="submit" class="btn-primary-glass">حفظ الرمز وتفعيل الثقة</button>
-              ${isThisTrusted ? `<button type="button" class="tool-btn danger" id="revoke-trust-btn">إلغاء الثقة بهذا المتصفح</button>` : ""}
+              ${isThisTrusted ? `<button type="button" class="tool-btn danger" id="revoke-trust-btn">إلغاء الثقة</button>` : ""}
             </div>
           </form>
         </div>
 
         <div class="glass-card settings-form-card">
-          <h3>تغيير كلمة المرور الخاصة بك</h3>
+          <h3>تغيير كلمة المرور</h3>
           <form id="pass-update-form" style="margin-top:14px">
             <div class="form-group">
               <label>كلمة المرور الحالية</label>
@@ -2139,14 +2633,53 @@ function renderSecurityAndLogs(container) {
 
   document.getElementById("back-to-hub")?.addEventListener("click", () => navigateAdmin("hub"));
 
+  document.getElementById("self-avatar-file")?.addEventListener("change", async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const statusEl = document.getElementById("self-avatar-status");
+    try {
+      const url = await uploadCompressedImageToImgBB(file, statusEl, 512);
+      document.getElementById("self-avatar-url").value = url;
+      document.getElementById("self-avatar-preview").innerHTML = renderAvatarHtml(url, me.displayName || me.username, "lg");
+    } catch (err) {
+      statusEl.textContent = err.message;
+      showToast(err.message, "error");
+    }
+  });
+
+  document.getElementById("self-profile-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById("save-self-profile-btn");
+    btn.disabled = true;
+    const updates = {
+      displayName: document.getElementById("self-display").value.trim(),
+      avatarUrl: document.getElementById("self-avatar-url").value.trim(),
+      bio: document.getElementById("self-bio").value.trim(),
+      updatedAt: new Date().toISOString()
+    };
+    try {
+      await updateDoc(doc(db, "admins", me.id), updates);
+      state.currentUser = { ...state.currentUser, ...updates };
+      const idx = state.admins.findIndex((a) => a.id === me.id);
+      if (idx >= 0) state.admins[idx] = { ...state.admins[idx], ...updates };
+      applyAdminBranding();
+      await logActivity("تحديث الملف الشخصي", updates.displayName);
+      showToast("تم تحديث ملفك الشخصي وصورتك بنجاح ✓");
+    } catch {
+      showToast("تعذر تحديث الملف الشخصي", "error");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
   document.getElementById("pin-update-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const pin = document.getElementById("sec-new-pin").value.trim();
     if (!/^\d{4}$/.test(pin)) { showToast("الرمز يجب أن يكون 4 أرقام بالضبط", "error"); return; }
     const pinHash = await sha256(pin);
-    await updateDoc(doc(db, "admins", state.currentUser.id), { pinHash });
+    await updateDoc(doc(db, "admins", me.id), { pinHash });
     state.currentUser.pinHash = pinHash;
-    setTrustedDevice({ adminId: state.currentUser.id, username: state.currentUser.username, mode: "pin", skipPin: false });
+    setTrustedDevice({ adminId: me.id, username: me.username, mode: "pin", skipPin: false });
     await logActivity("تحديث الرمز السريع", "تم تعيين رمز سريع جديد من 4 أرقام");
     showToast("تم حفظ الرمز السريع وتوثيق المتصفح ✓");
     renderAdminView();
@@ -2168,9 +2701,9 @@ function renderSecurityAndLogs(container) {
       return;
     }
     const newHash = await sha256(newP);
-    await updateDoc(doc(db, "admins", state.currentUser.id), { passwordHash: newHash });
+    await updateDoc(doc(db, "admins", me.id), { passwordHash: newHash });
     state.currentUser.passwordHash = newHash;
-    await logActivity("تغيير كلمة المرور", state.currentUser.username);
+    await logActivity("تغيير كلمة المرور", me.username);
     showToast("تم تغيير كلمة المرور بنجاح ✓");
     e.target.reset();
   });
@@ -2183,14 +2716,21 @@ function renderSecurityAndLogs(container) {
         wrap.innerHTML = `<p class="helper-hint">لا توجد سجلات مطابقة.</p>`;
         return;
       }
-      wrap.innerHTML = list.map((l) => `
-        <div class="log-row">
-          <div>
-            <strong>${escapeHtml(l.action)}</strong> — <span>${escapeHtml(l.details || "")}</span>
+      wrap.innerHTML = list.map((l) => {
+        const matchedAdmin = state.admins.find((a) => a.username === l.actorUsername);
+        const av = l.actorAvatar || matchedAdmin?.avatarUrl || "";
+        return `
+          <div class="log-row">
+            <div class="log-actor-wrap">
+              ${renderAvatarHtml(av, l.actor, "mini")}
+              <div>
+                <strong>${escapeHtml(l.action)}</strong> — <span>${escapeHtml(l.details || "")}</span>
+              </div>
+            </div>
+            <small>${escapeHtml(l.actor)} • ${formatDate(l.createdAt)}</small>
           </div>
-          <small>${escapeHtml(l.actor)} • ${formatDate(l.createdAt)}</small>
-        </div>
-      `).join("");
+        `;
+      }).join("");
     };
     document.getElementById("logs-search-input")?.addEventListener("input", (e) => {
       state.filters.logSearch = e.target.value;
@@ -2201,7 +2741,7 @@ function renderSecurityAndLogs(container) {
 }
 
 /* ============================================================================
- * 10. محرك البحث العالمي الذكي داخل غرفة العمليات (Admin Spotlight)
+ * 11. محرك البحث العالمي الذكي داخل غرفة العمليات (يلتقط من نبذ الموظفين أيضاً)
  * ============================================================================ */
 function openAdminSpotlight() {
   const modal = document.getElementById("admin-spotlight-modal");
@@ -2221,24 +2761,29 @@ function renderAdminSpotlightResults(q) {
   const wrap = document.getElementById("admin-spotlight-results");
   if (!wrap) return;
   if (!q.trim()) {
-    wrap.innerHTML = `<div class="spotlight-hint">ابحث في كل المواد، الاختبارات، والمشرفين بذكاء (بدون تشكيل أو همزات)...</div>`;
+    wrap.innerHTML = `<div class="spotlight-hint">ابحث في المواد، الاختبارات، أو أي كلمة من نبذة الموظفين (يدعم البحث بدون تشكيل أو همزات)...</div>`;
     return;
   }
 
   const hits = [];
   if (hasPerm("manage_content")) {
-    smartFilter(state.items, q, (it) => `${it.title} ${it.branch} ${it.summary || ""}`).slice(0, 8).forEach((it) => {
+    smartFilter(state.items, q, (it) => `${it.title} ${it.branch} ${it.summary || ""} ${(it.tags || []).join(" ")}`).slice(0, 8).forEach((it) => {
       hits.push({ type: "item", id: it.id, title: it.title, sub: it.branch, tag: "محتوى" });
     });
   }
   if (hasPerm("manage_quizzes")) {
-    smartFilter(state.quizzes, q, (qz) => `${qz.title} ${qz.branch}`).slice(0, 5).forEach((qz) => {
+    smartFilter(state.quizzes, q, (qz) => `${qz.title} ${qz.branch} ${qz.description || ""}`).slice(0, 5).forEach((qz) => {
       hits.push({ type: "quiz", id: qz.id, title: qz.title, sub: qz.branch, tag: "اختبار" });
     });
   }
   if (hasPerm("manage_admins")) {
-    smartFilter(state.admins, q, (ad) => `${ad.displayName || ""} ${ad.username}`).slice(0, 5).forEach((ad) => {
-      hits.push({ type: "admin", id: ad.id, title: ad.displayName || ad.username, sub: ad.username, tag: "مشرف" });
+    smartFilter(state.admins, q, (ad) => `${ad.displayName || ""} ${ad.username} ${ad.bio || ""}`).slice(0, 6).forEach((ad) => {
+      hits.push({
+        type: "admin", id: ad.id,
+        title: ad.displayName || ad.username,
+        sub: ad.bio || ad.username,
+        tag: "موظف"
+      });
     });
   }
 
@@ -2276,7 +2821,7 @@ function renderAdminSpotlightResults(q) {
 }
 
 /* ============================================================================
- * 11. النافذة المنبثقة العامة (Modal Helper) ونقطة الانطلاق
+ * 12. النوافذ المنبثقة ونقطة الانطلاق
  * ============================================================================ */
 function openModal(title, bodyHtml, size = "normal") {
   const backdrop = document.getElementById("admin-modal-backdrop");
@@ -2289,6 +2834,8 @@ function openModal(title, bodyHtml, size = "normal") {
 }
 
 function closeModal() {
+  clearTimeout(state.draftTimer);
+  state.selectedEditorFigure = null;
   document.getElementById("admin-modal-backdrop").hidden = true;
   document.body.style.overflow = "";
 }
@@ -2298,6 +2845,10 @@ function initAdminApp() {
   document.getElementById("header-spotlight-btn")?.addEventListener("click", openAdminSpotlight);
   document.getElementById("header-logout-btn")?.addEventListener("click", logoutSession);
   document.getElementById("close-admin-modal")?.addEventListener("click", closeModal);
+  document.getElementById("close-preview-modal")?.addEventListener("click", closeLivePreviewModal);
+  document.getElementById("preview-modal-backdrop")?.addEventListener("click", (e) => {
+    if (e.target.id === "preview-modal-backdrop") closeLivePreviewModal();
+  });
   document.getElementById("close-admin-spotlight")?.addEventListener("click", closeAdminSpotlight);
   document.getElementById("admin-spotlight-modal")?.addEventListener("click", (e) => {
     if (e.target.id === "admin-spotlight-modal") closeAdminSpotlight();
@@ -2314,8 +2865,12 @@ function initAdminApp() {
       e.preventDefault();
       openAdminSpotlight();
     } else if (e.key === "Escape") {
-      closeAdminSpotlight();
-      closeModal();
+      if (!document.getElementById("preview-modal-backdrop")?.hidden) {
+        closeLivePreviewModal();
+      } else {
+        closeAdminSpotlight();
+        closeModal();
+      }
     }
   });
 
