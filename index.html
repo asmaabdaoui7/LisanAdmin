@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+
+  <!-- حماية غرفة العمليات من الفهرسة في محركات البحث -->
+  <title>غرفة العمليات — لِسَان | LISAN</title>
+  <meta name="robots" content="noindex, nofollow, noarchive" />
+  <meta name="theme-color" content="#f3f6fb" />
+
+  <!-- أيقونة تبويب المتصفح -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%230071e3'/%3E%3Cstop offset='100%25' stop-color='%235e5ce6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Ctext x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='700' font-size='32'%3Eل%3C/text%3E%3C/svg%3E" />
+
+  <!-- الخط العربي العصري -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- ملف المظهر الزجاجي الفاتح -->
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <!-- 1. شاشة المصادقة (كلمة المرور / الوثوق بالمتصفح / الرمز السريع 4 أرقام) -->
+  <section id="auth-screen" class="auth-screen" aria-label="تسجيل الدخول إلى غرفة العمليات">
+    <div class="glass-card auth-card">
+      <div id="auth-card-content">
+        <div class="auth-brand-badge">ل</div>
+        <h1 class="auth-title">غرفة عمليات لِسَان | LISAN</h1>
+        <p class="auth-subtitle">جارٍ تهيئة الاتصال الآمن بقاعدة البيانات...</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. واجهة غرفة العمليات الرئيسية -->
+  <div id="admin-app" hidden>
+    <header class="admin-header">
+      <div class="container header-inner">
+        <button type="button" id="admin-brand-home" class="brand-btn" aria-label="العودة إلى الرئيسية في غرفة العمليات">
+          <div class="brand-logo-box" aria-hidden="true">ل</div>
+          <div class="brand-texts">
+            <span class="brand-title">غرفة عمليات لِسَان</span>
+            <span class="brand-subtitle">لوحة التحكم والمرونة الشاملة</span>
+          </div>
+        </button>
+
+        <div class="header-actions">
+          <span id="current-admin-name" class="admin-user-pill">الإدارة</span>
+          <button type="button" id="header-spotlight-btn" class="tool-btn" aria-label="البحث الذكي الشامل">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <span>بحث ذكي</span>
+          </button>
+          <button type="button" id="header-logout-btn" class="tool-btn danger" aria-label="تسجيل الخروج">
+            <span>خروج</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main id="admin-main" aria-live="polite"></main>
+  </div>
+
+  <!-- 3. النافذة المنبثقة العامة (محرر المواد، منشئ الاختبارات، إدارة المشرفين) -->
+  <div id="admin-modal-backdrop" class="glass-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-modal-title" hidden>
+    <div id="admin-modal-dialog" class="admin-modal-dialog">
+      <div class="admin-modal-header">
+        <h2 id="admin-modal-title">نافذة التحرير</h2>
+        <button type="button" id="close-admin-modal" class="tool-btn" aria-label="إغلاق النافذة">إغلاق</button>
+      </div>
+      <div id="admin-modal-body" class="admin-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- 4. نافذة البحث العالمي الذكي داخل غرفة العمليات (Spotlight) -->
+  <div id="admin-spotlight-modal" class="glass-modal-backdrop" role="dialog" aria-modal="true" aria-label="البحث الشامل في غرفة العمليات" hidden>
+    <div class="spotlight-modal">
+      <div class="spotlight-header">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent); flex-shrink: 0;">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="search" id="admin-spotlight-input" placeholder="ابحث في المواد، الاختبارات، أو المشرفين..." autocomplete="off" />
+        <button type="button" id="close-admin-spotlight" class="tool-btn">إغلاق</button>
+      </div>
+      <div id="admin-spotlight-results" class="spotlight-results"></div>
+    </div>
+  </div>
+
+  <!-- 5. حاوية الإشعارات الزجاجية -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- المحرك الرئيسي لغرفة العمليات -->
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
