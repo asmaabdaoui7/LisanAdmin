@@ -1,14 +1,14 @@
 /**
  * ============================================================================
- * لِسَان | LISAN — غرفة العمليات ولوحة التحكم الشاملة (app.js) — الإصدار 3.0
+ * لِسَان | LISAN — غرفة العمليات ولوحة التحكم الشاملة (app.js) — الإصدار 3.1
  * ============================================================================
  * 1. تأسيس تلقائي للأدمن الرئيسي (Admin / 123456) بتشفير SHA-256 + الرمز السريع (4 أرقام)
- * 2. شؤون الطلبة والعضويات: مراجعة البطاقة الجامعية السرية + التدرج العادل + الإشعارات الفورية
- * 3. مركز الدعم الفني والتذاكر (بصلاحية موظف دعم مستقلة + بحث ذكي بمعرّف LISAN-XXXXXXXX)
- * 4. محرر الصفحات التعريفية المرنة (من نحن، الرسالة والمنهجية، الخصوصية، وصفحات مخصصة)
- * 5. التحكم الثلاثي بالميزات (on: مفعّل | soon: قريباً | off: مخفي) + سياسات التسجيل والدعم
- * 6. المحرر الأكاديمي الحر للصور + المعاينة الحية + الحفظ التلقائي + مولّد sitemap.xml
- * 7. المرآة الفورية بين المستودعين + ملفات الموظفين (صورة ونبذة وبحث ذكي داخل النبذة)
+ * 2. حصانة مطلقة للأدمن الرئيسي (لا يُعدّل ولا يُحذف من أي مشرف) + حصر حذف الموظفين بالإدارة العليا
+ * 3. نوافذ تأكيد زجاجية أنيقة قبل كل إجراء لمنع الأخطاء البشرية
+ * 4. شؤون الطلبة: مراجعة البطاقة السرية + التدرج العادل + الشطب النهائي (أرشيف السجل)
+ * 5. مركز الدعم الفني والتذاكر (موظف دعم مستقل + بحث ذكي بمعرّف LISAN-XXXXXXXX)
+ * 6. محرر الصفحات التعريفية + التحكم الثلاثي بالميزات (مفعّل / قريباً / مخفي)
+ * 7. المحرر الأكاديمي الحر للصور + المعاينة الحية + الحفظ التلقائي + مولّد sitemap.xml
  * ============================================================================
  */
 
@@ -64,7 +64,7 @@ const PERMISSIONS_CATALOG = [
   { key: "manage_sections", label: "تعديل أسماء الأقسام الستة وفروعها وأوصافها" },
   { key: "manage_features", label: "التحكم الثلاثي بميزات وأقسام الموقع (مفعّل / قريباً / مخفي)" },
   { key: "manage_settings", label: "تعديل هوية المنصة، الشعار، الألوان، بيانات الدعم، وخريطة SEO" },
-  { key: "manage_admins", label: "إدارة فريق المشرفين ومنح الصلاحيات" },
+  { key: "manage_admins", label: "إدارة فريق المشرفين وإضافة/تعديل الصلاحيات (الحذف حصري للأدمن الرئيسي)" },
   { key: "view_logs", label: "الاطلاع على سجل النشاطات والعمليات" }
 ];
 
@@ -97,7 +97,8 @@ const STUDENT_STATUS_META = {
   restricted_readonly: { label: "قراءة فقط", tone: "warn" },
   hidden_profile: { label: "ملف عام مخفي", tone: "info" },
   suspended: { label: "معلّق مؤقتاً", tone: "danger" },
-  rejected: { label: "يحتاج استكمال بيانات", tone: "danger" }
+  rejected: { label: "يحتاج استكمال بيانات", tone: "danger" },
+  terminated: { label: "مشطوب نهائياً (أرشيف)", tone: "terminated" }
 };
 
 const DEFAULT_SETTINGS = {
@@ -111,7 +112,7 @@ const DEFAULT_SETTINGS = {
   contactEmail: "",
   themeAccent: "#0071e3",
   publicBaseUrl: "",
-  studentIdCardMode: "optional", // optional | required | hidden
+  studentIdCardMode: "optional",
   requireLoginForQuiz: false,
   supportContacts: {
     whatsapp: "",
@@ -206,7 +207,7 @@ const DEFAULT_PAGES = [
  * ============================================================================ */
 const state = {
   currentUser: null,
-  view: "hub", // hub | content | quizzes | submissions | students | support | pages | sections | features | settings | admins | security
+  view: "hub",
   settings: structuredClone(DEFAULT_SETTINGS),
   pages: structuredClone(DEFAULT_PAGES),
   items: [],
@@ -220,9 +221,9 @@ const state = {
     contentStatus: "الكل",
     contentSearch: "",
     quizSearch: "",
-    studentTab: "pending_review", // pending_review | approved | restricted | pending_email | all
+    studentTab: "pending_review", // pending_review | approved | restricted | pending_email | terminated | all
     studentSearch: "",
-    ticketTab: "open", // open | answered | closed | all
+    ticketTab: "open",
     ticketSearch: "",
     adminSearch: "",
     logSearch: ""
@@ -247,6 +248,7 @@ const ICONS = {
   palette: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.5-.75 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c3.31 0 6-2.69 6-6 0-4.96-4.49-9-10-9z"/></svg>`,
   users: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
   shield: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+  alert: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
   search: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
   plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
   arrowRight: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>`,
@@ -259,7 +261,103 @@ const ICONS = {
 };
 
 /* ============================================================================
- * 5. التشفير، البحث العربي الذكي، الأفاتار، وضغط الصور لـ ImgBB
+ * 5. نافذة التأكيد الزجاجية الأنيقة الموحدة (تظهر قبل كل إجراء مهم)
+ * ============================================================================ */
+function confirmActionModal({
+  title = "تأكيد الإجراء",
+  target = "",
+  message = "هل أنت متأكد من تنفيذ هذا الإجراء؟",
+  confirmText = "نعم، تأكيد التنفيذ",
+  cancelText = "تراجع",
+  tone = "primary", // primary | warning | danger
+  checkboxLabel = "",
+  checkboxDefault = false,
+  inputLabel = "",
+  inputPlaceholder = "",
+  inputRequired = false
+}) {
+  return new Promise((resolve) => {
+    const existing = document.getElementById("lisan-confirm-backdrop");
+    if (existing) existing.remove();
+
+    const backdrop = document.createElement("div");
+    backdrop.id = "lisan-confirm-backdrop";
+    backdrop.className = "glass-modal-backdrop confirm-top-layer";
+    backdrop.setAttribute("role", "alertdialog");
+    backdrop.setAttribute("aria-modal", "true");
+
+    const ico = tone === "danger" || tone === "warning" ? ICONS.alert : ICONS.shield;
+
+    backdrop.innerHTML = `
+      <div class="confirm-glass-dialog tone-${tone}">
+        <div class="confirm-icon-badge tone-${tone}">${ico}</div>
+        <h3 class="confirm-title">${escapeHtml(title)}</h3>
+        ${target ? `<div class="confirm-target-chip">${escapeHtml(target)}</div>` : ""}
+        <p class="confirm-message">${escapeHtml(message)}</p>
+
+        ${inputLabel ? `
+          <div class="confirm-input-wrap">
+            <label for="lisan-confirm-input">${escapeHtml(inputLabel)}</label>
+            <textarea id="lisan-confirm-input" rows="2" placeholder="${escapeHtml(inputPlaceholder)}"></textarea>
+            <small id="lisan-confirm-err" class="helper-hint error" hidden>هذا الحقل مطلوب قبل المتابعة.</small>
+          </div>
+        ` : ""}
+
+        ${checkboxLabel ? `
+          <label class="confirm-checkbox-row">
+            <input type="checkbox" id="lisan-confirm-chk" ${checkboxDefault ? "checked" : ""} />
+            <span>${escapeHtml(checkboxLabel)}</span>
+          </label>
+        ` : ""}
+
+        <div class="confirm-actions-row">
+          <button type="button" class="tool-btn" id="lisan-confirm-cancel">${escapeHtml(cancelText)}</button>
+          <button type="button" class="confirm-submit-btn tone-${tone}" id="lisan-confirm-ok">${escapeHtml(confirmText)}</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(backdrop);
+
+    const cleanup = (result) => {
+      document.removeEventListener("keydown", onEsc);
+      backdrop.remove();
+      resolve(result);
+    };
+
+    const onEsc = (e) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        cleanup({ confirmed: false, checked: false, inputValue: "" });
+      }
+    };
+    document.addEventListener("keydown", onEsc, true);
+
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) cleanup({ confirmed: false, checked: false, inputValue: "" });
+    });
+
+    backdrop.querySelector("#lisan-confirm-cancel")?.addEventListener("click", () => {
+      cleanup({ confirmed: false, checked: false, inputValue: "" });
+    });
+
+    backdrop.querySelector("#lisan-confirm-ok")?.addEventListener("click", () => {
+      const inp = backdrop.querySelector("#lisan-confirm-input");
+      const val = inp ? inp.value.trim() : "";
+      if (inputRequired && !val) {
+        const err = backdrop.querySelector("#lisan-confirm-err");
+        if (err) err.hidden = false;
+        inp?.focus();
+        return;
+      }
+      const chk = backdrop.querySelector("#lisan-confirm-chk");
+      cleanup({ confirmed: true, checked: Boolean(chk?.checked), inputValue: val });
+    });
+  });
+}
+
+/* ============================================================================
+ * 6. التشفير، البحث العربي الذكي، الأفاتار، وضغط الصور لـ ImgBB
  * ============================================================================ */
 async function sha256(text) {
   const data = new TextEncoder().encode(String(text));
@@ -303,6 +401,10 @@ function hasPerm(permKey) {
   if (!state.currentUser) return false;
   if (state.currentUser.isSuperAdmin) return true;
   return Array.isArray(state.currentUser.permissions) && state.currentUser.permissions.includes(permKey);
+}
+
+function isSuperAdminUser() {
+  return Boolean(state.currentUser?.isSuperAdmin);
 }
 
 function normalizeFeatureVal(v) {
@@ -379,7 +481,7 @@ async function uploadCompressedImageToImgBB(file, statusEl = null, maxWidth = 14
 }
 
 /* ============================================================================
- * 6. المرآة الفورية + السجلات + إرسال إشعار فوري للطالب + تأسيس الأدمن
+ * 7. المرآة الفورية + السجلات + إرسال إشعار فوري للطالب + تأسيس الأدمن
  * ============================================================================ */
 function applyAdminBranding() {
   const s = state.settings;
@@ -471,7 +573,7 @@ async function ensureBootstrapSuperAdmin() {
 }
 
 /* ============================================================================
- * 7. نظام المصادقة لغرفة العمليات (كلمة المرور + المتصفح الموثوق + PIN)
+ * 8. نظام المصادقة لغرفة العمليات (كلمة المرور + المتصفح الموثوق + PIN)
  * ============================================================================ */
 function getTrustedDevice() {
   try { return JSON.parse(localStorage.getItem(TRUST_STORAGE_KEY) || "null"); } catch { return null; }
@@ -752,7 +854,7 @@ function logoutSession() {
 }
 
 /* ============================================================================
- * 8. جلب جميع البيانات الحية من Firestore
+ * 9. جلب جميع البيانات الحية من Firestore
  * ============================================================================ */
 function deepMergeSettings(remote = {}) {
   const merged = structuredClone(DEFAULT_SETTINGS);
@@ -783,7 +885,7 @@ async function loadAllAdminData() {
     getDocs(collection(db, "students")),
     getDocs(collection(db, "tickets")),
     getDocs(collection(db, "admins")),
-    getDocs(query(collection(db, "logs"), orderBy("createdAt", "desc"), limit(80)))
+    getDocs(query(collection(db, "logs"), orderBy("createdAt", "desc"), limit(100)))
   ]);
 
   if (setSnap.status === "fulfilled" && setSnap.value.exists()) {
@@ -805,14 +907,17 @@ async function loadAllAdminData() {
     state.tickets = ticketsSnap.value.docs.map((d) => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (b.updatedAt || b.createdAt || "").localeCompare(a.updatedAt || a.createdAt || ""));
   }
-  if (adminsSnap.status === "fulfilled") state.admins = adminsSnap.value.docs.map((d) => ({ id: d.id, ...d.data() }));
+  if (adminsSnap.status === "fulfilled") {
+    state.admins = adminsSnap.value.docs.map((d) => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => Number(Boolean(b.isSuperAdmin)) - Number(Boolean(a.isSuperAdmin)));
+  }
   if (logsSnap.status === "fulfilled") state.logs = logsSnap.value.docs.map((d) => ({ id: d.id, ...d.data() }));
 
   applyAdminBranding();
 }
 
 /* ============================================================================
- * 9. التنقل بالكشف التدريجي (الكراتين المرتبة — Hub Grid)
+ * 10. التنقل بالكشف التدريجي (الكراتين المرتبة — Hub Grid)
  * ============================================================================ */
 function navigateAdmin(viewName) {
   state.view = viewName;
@@ -849,8 +954,8 @@ function renderHubView(container) {
     {
       id: "students", perm: "manage_students", icon: ICONS.student, accent: "#0284c7",
       title: "شؤون الطلبة والعضويات",
-      desc: "مراجعة البطاقات الأكاديمية، توثيق العضويات، التقييد العادل، وإرسال الإشعارات.",
-      badge: pendingStudents > 0 ? `${pendingStudents} للمراجعة` : `${state.students.length} طالب`,
+      desc: "مراجعة البطاقات الأكاديمية، التوثيق، التقييد العادل، وأرشيف الشطب النهائي.",
+      badge: pendingStudents > 0 ? `${pendingStudents} للمراجعة` : `${state.students.length} سجل`,
       highlight: pendingStudents > 0
     },
     {
@@ -906,7 +1011,7 @@ function renderHubView(container) {
     {
       id: "admins", perm: "manage_admins", icon: ICONS.users, accent: "#db2777",
       title: "فريق الإدارة والدعم",
-      desc: "إضافة مشرفين وموظفي دعم بصورهم ونبذهم وصلاحيات محددة بالاختيار.",
+      desc: "إضافة مشرفين وموظفي دعم بصلاحيات محددة مع حصانة كاملة للأدمن الرئيسي.",
       badge: `${state.admins.length} موظف`
     },
     {
@@ -923,7 +1028,10 @@ function renderHubView(container) {
         <div class="hub-welcome-user">
           ${renderAvatarHtml(state.currentUser.avatarUrl, state.currentUser.displayName || state.currentUser.username, "xl")}
           <div>
-            <span class="pill-badge">غرفة العمليات المركزية</span>
+            <div class="row-badges" style="margin-bottom:4px">
+              <span class="pill-badge">غرفة العمليات المركزية</span>
+              ${isSuperAdminUser() ? `<span class="immunity-badge">🛡 الإدارة العليا (محصّن)</span>` : ""}
+            </div>
             <h1>مرحباً، ${escapeHtml(state.currentUser.displayName || state.currentUser.username)}</h1>
             <p>${escapeHtml(state.currentUser.bio || "كل قسم مرتّب داخل صندوقه الخاص للوصول السريع والهادئ.")}</p>
           </div>
@@ -974,7 +1082,7 @@ function renderSubHeader(title, subtitle, extraBtnHtml = "") {
 }
 
 /* ============================================================================
- * 10. صندوق شؤون الطلبة والعضويات (التوثيق + البطاقة السرية + التدرج العادل)
+ * 11. صندوق شؤون الطلبة والعضويات (التدرج العادل + الشطب النهائي وأرشيف السجل)
  * ============================================================================ */
 function renderStudentsManager(container) {
   if (!hasPerm("manage_students")) return navigateAdmin("hub");
@@ -984,6 +1092,7 @@ function renderStudentsManager(container) {
     approved: state.students.filter((s) => s.status === "approved").length,
     restricted: state.students.filter((s) => ["restricted_publish", "restricted_readonly", "hidden_profile", "suspended", "rejected"].includes(s.status)).length,
     pending_email: state.students.filter((s) => s.status === "pending_email").length,
+    terminated: state.students.filter((s) => s.status === "terminated").length,
     all: state.students.length
   };
 
@@ -991,11 +1100,11 @@ function renderStudentsManager(container) {
     <div class="container">
       ${renderSubHeader(
         "شؤون الطلبة وتوثيق العضويات",
-        "راجع البطاقات الجامعية السرية، وثّق الطلبة الحقيقيين، وأدر التقييدات بعدالة وشفافية مع إشعارات فورية."
+        "راجع البطاقات السرية، وثّق الطلبة، وأدر التقييدات العادلة. الشطب النهائي حصري للإدارة العليا ويُحفظ قيده في الأرشيف."
       )}
 
       <div class="light-guide-bar">
-        💡 <strong>توجيه:</strong> لا تنتقل الطلبات لتبويب «بانتظار المراجعة» إلا بعد تأكيد الطالب لبريده الإلكتروني (أو دخوله عبر Google). كل إجراء تتخذه يصل فوراً لإشعارات الطالب.
+        💡 <strong>توجيه:</strong> جميع الإجراءات تتطلب تأكيداً صريحاً لمنع الأخطاء، ويصل إشعار فوري للطالب. الحسابات المشطوبة نهائياً تبقى مقيدة في «أرشيف المشطوبين» ويُحظر دخولها أو إعادة تسجيل بريدها للأبد.
       </div>
 
       <div class="glass-panel filter-toolbar">
@@ -1004,6 +1113,7 @@ function renderStudentsManager(container) {
           <button type="button" class="filter-tab ${state.filters.studentTab === "approved" ? "active" : ""}" data-st-tab="approved">موثقون (${counts.approved})</button>
           <button type="button" class="filter-tab ${state.filters.studentTab === "restricted" ? "active" : ""}" data-st-tab="restricted">مقيّدون / معلّقون (${counts.restricted})</button>
           <button type="button" class="filter-tab ${state.filters.studentTab === "pending_email" ? "active" : ""}" data-st-tab="pending_email">لم يؤكد البريد (${counts.pending_email})</button>
+          <button type="button" class="filter-tab ${state.filters.studentTab === "terminated" ? "active" : ""}" data-st-tab="terminated">أرشيف المشطوبين (${counts.terminated})</button>
           <button type="button" class="filter-tab ${state.filters.studentTab === "all" ? "active" : ""}" data-st-tab="all">الكل (${counts.all})</button>
         </div>
         <div class="local-search-box">
@@ -1024,6 +1134,7 @@ function renderStudentsManager(container) {
     if (t === "pending_review") list = list.filter((s) => s.status === "pending_review");
     else if (t === "approved") list = list.filter((s) => s.status === "approved");
     else if (t === "pending_email") list = list.filter((s) => s.status === "pending_email");
+    else if (t === "terminated") list = list.filter((s) => s.status === "terminated");
     else if (t === "restricted") list = list.filter((s) => ["restricted_publish", "restricted_readonly", "hidden_profile", "suspended", "rejected"].includes(s.status));
 
     list = smartFilter(list, state.filters.studentSearch, (s) =>
@@ -1038,23 +1149,27 @@ function renderStudentsManager(container) {
 
     wrap.innerHTML = list.map((st) => {
       const meta = STUDENT_STATUS_META[st.status] || { label: st.status, tone: "info" };
+      const isTerm = st.status === "terminated";
       return `
-        <div class="glass-card admin-row-card">
+        <div class="glass-card admin-row-card ${isTerm ? "terminated-row" : ""}">
           ${renderAvatarHtml(st.avatarUrl, st.fullName, "md")}
           <div class="row-main">
             <div class="row-badges">
               <span class="status-dot tone-${meta.tone}">${meta.label}</span>
-              ${st.emailVerified ? `<span class="pill-badge">بريد مؤكَّد ✓</span>` : `<span class="pill-badge neutral">بريد غير مؤكد</span>`}
+              ${!isTerm && st.emailVerified ? `<span class="pill-badge">بريد مؤكَّد ✓</span>` : ""}
+              ${!isTerm && !st.emailVerified ? `<span class="pill-badge neutral">بريد غير مؤكد</span>` : ""}
               ${st.isEduEmail ? `<span class="pill-badge edu">بريد جامعي</span>` : ""}
               ${st.idCardUrl ? `<span class="pill-badge neutral">مرفق بطاقة جامعية</span>` : ""}
             </div>
             <h3>${escapeHtml(st.fullName || "طالب")}</h3>
             <p>${escapeHtml(st.university || "—")} • ${escapeHtml(st.major || "—")} (${escapeHtml(st.level || "—")})</p>
-            <p class="admin-meta-line" dir="ltr" style="text-align:right">${escapeHtml(st.email || "")} • سجل في ${formatDate(st.createdAt)}</p>
+            <p class="admin-meta-line" dir="ltr" style="text-align:right">
+              ${escapeHtml(st.email || "")} • ${isTerm ? `شُطب في ${formatDate(st.terminatedAt)}` : `سجّل في ${formatDate(st.createdAt)}`}
+            </p>
           </div>
           <div class="row-actions">
             ${st.status === "pending_review" ? `<button type="button" class="btn-primary-glass" data-quick-approve="${st.id}">اعتماد سريع</button>` : ""}
-            <button type="button" class="tool-btn" data-manage-student="${st.id}">${ICONS.shield} مراجعة وإجراءات</button>
+            <button type="button" class="tool-btn" data-manage-student="${st.id}">${ICONS.shield} ${isTerm ? "عرض سجل الشطب" : "مراجعة وإجراءات"}</button>
           </div>
         </div>
       `;
@@ -1064,8 +1179,16 @@ function renderStudentsManager(container) {
       btn.addEventListener("click", async () => {
         const st = state.students.find((x) => x.id === btn.dataset.quickApprove);
         if (!st) return;
+        const res = await confirmActionModal({
+          title: "تأكيد اعتماد وتوثيق الحساب",
+          target: `${st.fullName} (${st.university || "—"})`,
+          message: "سيصبح الطالب عضواً موثقاً ونشطاً في المنصة، وسيصله إشعار فوري بقبول عضويته.",
+          confirmText: "نعم، اعتماد وتوثيق",
+          tone: "primary"
+        });
+        if (!res.confirmed) return;
         await applyStudentAction(st, "approved", "تم التحقق من بياناتك الأكاديمية وتوثيق عضويتك بنجاح في منصة لِسَان!");
-        paint();
+        renderAdminView();
       });
     });
 
@@ -1126,25 +1249,71 @@ async function applyStudentAction(st, nextStatus, reasonText, isWarningOnly = fa
     message: reasonText || "تم تحديث حالة حسابك من قِبل الإدارة."
   });
 
-  await logActivity(isWarningOnly ? "تحذير ودي لطالب" : `تغيير حالة طالب (${nextStatus})`, `${st.fullName} (${st.email})`);
-  showToast(isWarningOnly ? "تم إرسال التنبيه الودي إلى صندوق إشعارات الطالب ✓" : "تم تطبيق الإجراء وإشعار الطالب فوراً ✓");
+  await logActivity(
+    isWarningOnly ? "تحذير ودي لطالب" : `إجراء على حساب طالب (${STUDENT_STATUS_META[nextStatus]?.label || nextStatus})`,
+    `${st.fullName} (${st.email}) — السبب: ${reasonText || "اعتماد عادي"}`
+  );
+  showToast(isWarningOnly ? "تم إرسال التنبيه الودي للطالب ✓" : "تم تطبيق الإجراء وإشعار الطالب فوراً ✓");
+}
+
+async function terminateStudentPermanently(st, reasonText, hidePreviousSubmissions = true) {
+  if (!isSuperAdminUser()) {
+    showToast("عذراً، إجراء الشطب النهائي حصري للأدمن الرئيسي فقط.", "error");
+    return;
+  }
+  const now = new Date().toISOString();
+  const actorName = state.currentUser.displayName || state.currentUser.username;
+
+  const updates = {
+    status: "terminated",
+    statusReason: reasonText,
+    terminatedAt: now,
+    terminatedBy: actorName,
+    avatarUrl: "",
+    idCardUrl: "",
+    showGradesPublic: false,
+    updatedAt: now
+  };
+
+  await updateDoc(doc(db, "students", st.id), updates);
+  Object.assign(st, updates);
+
+  let hiddenCount = 0;
+  if (hidePreviousSubmissions) {
+    const uid = st.uid || st.id;
+    const subSnap = await getDocs(query(collection(db, "items"), where("studentUid", "==", uid)));
+    for (const d of subSnap.docs) {
+      await updateDoc(doc(db, "items", d.id), { status: "draft", updatedAt: now }).catch(() => {});
+      const localItem = state.items.find((x) => x.id === d.id);
+      if (localItem) localItem.status = "draft";
+      hiddenCount++;
+    }
+  }
+
+  await logActivity(
+    "شطب وإنهاء حساب طالب نهائياً",
+    `${st.fullName} (${st.email}) — السبب: ${reasonText}${hiddenCount ? ` — تم إخفاء ${hiddenCount} مساهمة سابقة` : ""}`
+  );
+  showToast("تم شطب الحساب نهائياً وتقييده في أرشيف السجل بنجاح ✓");
 }
 
 async function openStudentManagementModal(st) {
   const meta = STUDENT_STATUS_META[st.status] || { label: st.status, tone: "info" };
+  const isTerminated = st.status === "terminated";
+
   let results = [];
   try {
     const rSnap = await getDocs(query(collection(db, "quizResults"), where("studentUid", "==", st.uid || st.id)));
     results = rSnap.docs.map((d) => d.data()).sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
   } catch {}
 
-  openModal(`ملف الطالب: ${st.fullName}`, `
+  openModal(isTerminated ? `سجل أرشيف مشطوب: ${st.fullName}` : `ملف الطالب: ${st.fullName}`, `
     <div class="student-modal-summary">
       ${renderAvatarHtml(st.avatarUrl, st.fullName, "lg")}
       <div style="flex:1">
         <div class="row-badges">
           <span class="status-dot tone-${meta.tone}">${meta.label}</span>
-          ${st.emailVerified ? `<span class="pill-badge">البريد مؤكَّد ✓</span>` : `<span class="pill-badge neutral">بريد غير مؤكَّد</span>`}
+          ${!isTerminated && st.emailVerified ? `<span class="pill-badge">البريد مؤكَّد ✓</span>` : ""}
           ${st.isEduEmail ? `<span class="pill-badge edu">بريد جامعي</span>` : ""}
           <span class="pill-badge neutral">${st.authProvider === "google" ? "دخول Google" : "بريد وكلمة مرور"}</span>
         </div>
@@ -1155,40 +1324,53 @@ async function openStudentManagementModal(st) {
       </div>
     </div>
 
-    ${st.idCardUrl ? `
-      <div class="idcard-secret-box">
-        <div class="idcard-secret-head">
-          <strong>🔒 البطاقة الجامعية / شهادة التسجيل (سرية للإدارة فقط)</strong>
-          <div class="form-actions-inline">
-            <a href="${escapeHtml(st.idCardUrl)}" target="_blank" rel="noopener noreferrer" class="tool-btn">فتح بحجم كامل</a>
-            <button type="button" class="tool-btn danger" id="purge-idcard-btn">حذف الوثيقة للخصوصية</button>
-          </div>
+    ${isTerminated ? `
+      <div class="terminated-archive-box">
+        <h4>⛔ قيد أرشيف دائم — حساب مشطوب نهائياً</h4>
+        <p>تم إنهاء هذا الحساب بشكل نهائي ومنع دخوله أو إعادة تسجيله بنفس البريد الإلكتروني، وتم مسح صورته الشخصية ووثيقته الجامعية حفظاً للخصوصية، مع بقاء هذا القيد للرقابة والتوثيق:</p>
+        <div class="archive-meta-grid">
+          <div><strong>تاريخ الشطب:</strong> <span>${formatDate(st.terminatedAt)}</span></div>
+          <div><strong>المنفّذ (الإدارة العليا):</strong> <span>${escapeHtml(st.terminatedBy || "الإدارة العليا")}</span></div>
+          <div style="grid-column: 1 / -1"><strong>سبب الشطب المسجّل:</strong> <span>${escapeHtml(st.statusReason || "—")}</span></div>
         </div>
-        <img src="${escapeHtml(st.idCardUrl)}" alt="وثيقة الطالب" class="idcard-preview-img" />
       </div>
-    ` : `<p class="helper-hint">لم يرفق الطالب صورة بطاقة جامعية.</p>`}
+    ` : `
+      ${st.idCardUrl ? `
+        <div class="idcard-secret-box">
+          <div class="idcard-secret-head">
+            <strong>🔒 البطاقة الجامعية / شهادة التسجيل (سرية للإدارة فقط)</strong>
+            <div class="form-actions-inline">
+              <a href="${escapeHtml(st.idCardUrl)}" target="_blank" rel="noopener noreferrer" class="tool-btn">فتح بحجم كامل</a>
+              <button type="button" class="tool-btn danger" id="purge-idcard-btn">حذف الوثيقة للخصوصية</button>
+            </div>
+          </div>
+          <img src="${escapeHtml(st.idCardUrl)}" alt="وثيقة الطالب" class="idcard-preview-img" />
+        </div>
+      ` : `<p class="helper-hint">لم يرفق الطالب صورة بطاقة جامعية.</p>`}
 
-    <div class="fair-actions-panel">
-      <h4 style="margin:0 0 8px">إجراءات الإدارة المرنة والعادلة (يصل إشعار فوري للطالب)</h4>
-      <div class="form-group">
-        <label>الإجراء المطلوب</label>
-        <select id="st-action-select">
-          <option value="approved">✓ اعتماد وتوثيق الحساب / رفع التقييد بالكامل</option>
-          <option value="warning_only">💬 إرسال تنبيه أو تحذير ودي (يبقى الحساب نشطاً بالكامل)</option>
-          <option value="restricted_publish">✋ تقييد النشر والمساهمات مؤقتاً (يسمح بالقراءة والاختبارات)</option>
-          <option value="restricted_readonly">👁 تحويل الحساب لوضع القراءة فقط مؤقتاً</option>
-          <option value="hidden_profile">🕶 إخفاء الملف الشخصي العام عن الزوار (يبقى نشطاً داخلياً)</option>
-          <option value="pending_review">🔄 إعادة الحساب لقائمة المراجعة</option>
-          <option value="rejected">📝 طلب استكمال أو تصحيح بيانات التوثيق</option>
-          <option value="suspended">⛔ تعليق مؤقت للحساب</option>
-        </select>
+      <div class="fair-actions-panel">
+        <h4 style="margin:0 0 8px">إجراءات الإدارة المرنة والعادلة (مع نافذة تأكيد وإشعار فوري)</h4>
+        <div class="form-group">
+          <label>اختر الإجراء المطلوب</label>
+          <select id="st-action-select">
+            <option value="approved">✓ اعتماد وتوثيق الحساب / رفع التقييد بالكامل</option>
+            <option value="warning_only">💬 إرسال تنبيه أو تحذير ودي (يبقى الحساب نشطاً بالكامل)</option>
+            <option value="restricted_publish">✋ تقييد النشر والمساهمات مؤقتاً (يسمح بالقراءة والاختبارات)</option>
+            <option value="restricted_readonly">👁 تحويل الحساب لوضع القراءة فقط مؤقتاً</option>
+            <option value="hidden_profile">🕶 إخفاء الملف الشخصي العام عن الزوار (يبقى نشطاً داخلياً)</option>
+            <option value="pending_review">🔄 إعادة الحساب لقائمة المراجعة</option>
+            <option value="rejected">📝 طلب استكمال أو تصحيح بيانات التوثيق</option>
+            <option value="suspended">⛔ تعليق مؤقت للحساب</option>
+            ${isSuperAdminUser() ? `<option value="terminated">☠️ الإجراء النهائي: شطب وإنهاء الحساب نهائياً (الإدارة العليا فقط)</option>` : ""}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>الرسالة التوضيحية أو السبب (يُحفظ في السجل ويصل للطالب)</label>
+          <textarea id="st-action-reason" rows="2" placeholder="اكتب سبباً واضحاً وعادلاً أو رسالة ترحيبية للطالب...">${escapeHtml(st.statusReason || "")}</textarea>
+        </div>
+        <button type="button" class="btn-primary-glass full-width" id="apply-st-action-btn">مراجعة وتأكيد الإجراء</button>
       </div>
-      <div class="form-group">
-        <label>الرسالة التوضيحية للطالب (تظهر له في صندوق الإشعارات والسبب)</label>
-        <textarea id="st-action-reason" rows="2" placeholder="اكتب سبباً واضحاً وعادلاً أو رسالة ترحيبية للطالب...">${escapeHtml(st.statusReason || "")}</textarea>
-      </div>
-      <button type="button" class="btn-primary-glass full-width" id="apply-st-action-btn">تطبيق الإجراء وإرسال الإشعار</button>
-    </div>
+    `}
 
     ${results.length ? `
       <div style="margin-top:18px">
@@ -1206,7 +1388,14 @@ async function openStudentManagementModal(st) {
   `, "wide");
 
   document.getElementById("purge-idcard-btn")?.addEventListener("click", async () => {
-    if (!confirm("هل تحققت من الطالب وتريد حذف صورة بطاقته الجامعية حفظاً لخصوصيته؟")) return;
+    const res = await confirmActionModal({
+      title: "حذف وثيقة الطالب للخصوصية",
+      target: st.fullName,
+      message: "هل تحققت من بيانات الطالب وتريد إزالة صورة بطاقته الجامعية نهائياً من قاعدة البيانات حفظاً لخصوصيته؟",
+      confirmText: "نعم، حذف الوثيقة",
+      tone: "warning"
+    });
+    if (!res.confirmed) return;
     await updateDoc(doc(db, "students", st.id), { idCardUrl: "" });
     st.idCardUrl = "";
     await logActivity("حذف بطاقة طالب للخصوصية", st.fullName);
@@ -1217,13 +1406,63 @@ async function openStudentManagementModal(st) {
   document.getElementById("apply-st-action-btn")?.addEventListener("click", async () => {
     const actionVal = document.getElementById("st-action-select").value;
     const reason = document.getElementById("st-action-reason").value.trim();
-    const isWarn = actionVal === "warning_only";
+
     if (!reason && actionVal !== "approved") {
-      showToast("يرجى كتابة سبب أو رسالة توضيحية عادلة للطالب قبل التنفيذ", "error");
+      showToast("يرجى كتابة سبب أو رسالة توضيحية عادلة قبل المتابعة", "error");
       return;
     }
+
+    // 1. الإجراء النهائي: الشطب النهائي (حصري للأدمن الرئيسي)
+    if (actionVal === "terminated") {
+      if (!isSuperAdminUser()) {
+        showToast("الشطب النهائي حصري للأدمن الرئيسي فقط", "error");
+        return;
+      }
+      const res = await confirmActionModal({
+        title: "تأكيد الشطب النهائي للحساب (قرار لا رجعة فيه)",
+        target: `${st.fullName} — ${st.email}`,
+        message: "سيتم إنهاء هذا الحساب نهائياً ومنع صاحبه من الدخول أو إعادة التسجيل بنفس البريد للأبد، ومسح صورته وبطاقته الجامعية، مع إبقاء قيده وسبب الشطب في أرشيف السجلات.",
+        confirmText: "نعم، أؤكد الشطب النهائي",
+        cancelText: "إلغاء وتراجع",
+        tone: "danger",
+        checkboxLabel: "إخفاء جميع مساهمات وأبحاث هذا الطالب المنشورة سابقاً عن الموقع العام أيضاً",
+        checkboxDefault: true
+      });
+      if (!res.confirmed) return;
+
+      const btn = document.getElementById("apply-st-action-btn");
+      btn.disabled = true;
+      await terminateStudentPermanently(st, reason, res.checked);
+      closeModal();
+      renderAdminView();
+      return;
+    }
+
+    // 2. باقي الإجراءات العادلة مع نافذة تأكيد أنيقة
+    const actionLabels = {
+      approved: { title: "تأكيد اعتماد وتفعيل الحساب", impact: "سيحصل الطالب على كامل صلاحيات العضو الموثق ويصله إشعار فوري.", tone: "primary" },
+      warning_only: { title: "تأكيد إرسال تحذير ودي", impact: "سيبقى حساب الطالب نشطاً بالكامل، وسيصل هذا التنبيه إلى صندوق إشعاراته.", tone: "warning" },
+      restricted_publish: { title: "تأكيد تقييد النشر والمساهمات", impact: "سيُمنع الطالب مؤقتاً من إرسال مشاريع جديدة مع بقاء القراءة والاختبارات، وسيصله إشعار بالسبب.", tone: "warning" },
+      restricted_readonly: { title: "تأكيد التحويل لوضع القراءة فقط", impact: "سيتمكن الطالب من التصفح فقط دون اختبارات أو مساهمات، وسيصله إشعار بالسبب.", tone: "warning" },
+      hidden_profile: { title: "تأكيد إخفاء الملف الشخصي العام", impact: "ستختفي بطاقة الطالب عن الزوار مع بقاء حسابه نشطاً داخلياً، وسيصله إشعار.", tone: "warning" },
+      pending_review: { title: "تأكيد إعادة الحساب للمراجعة", impact: "سيعود الحساب لقائمة المراجعة الأكاديمية ويصل للطالب إشعار بذلك.", tone: "warning" },
+      rejected: { title: "تأكيد طلب استكمال البيانات", impact: "سيُطلب من الطالب تحديث بياناته الجامعية أو البطاقة لإعادة المراجعة.", tone: "danger" },
+      suspended: { title: "تأكيد التعليق المؤقت للحساب", impact: "سيتم تجميد تفاعل الحساب مؤقتاً وعرض سبب التعليق للطالب مع زر للتواصل مع الدعم.", tone: "danger" }
+    };
+
+    const metaConf = actionLabels[actionVal] || { title: "تأكيد الإجراء", impact: "سيتم تطبيق الإجراء وإرسال إشعار للطالب.", tone: "warning" };
+    const res = await confirmActionModal({
+      title: metaConf.title,
+      target: `${st.fullName} (${st.email})`,
+      message: `${metaConf.impact}${reason ? `\nالرسالة المرفقة: «${reason}»` : ""}`,
+      confirmText: "نعم، تنفيذ وإشعار الطالب",
+      tone: metaConf.tone
+    });
+    if (!res.confirmed) return;
+
     const btn = document.getElementById("apply-st-action-btn");
     btn.disabled = true;
+    const isWarn = actionVal === "warning_only";
     await applyStudentAction(st, isWarn ? st.status : actionVal, reason || "تم توثيق وتفعيل حسابك بنجاح في منصة لِسَان!", isWarn);
     closeModal();
     renderAdminView();
@@ -1231,7 +1470,7 @@ async function openStudentManagementModal(st) {
 }
 
 /* ============================================================================
- * 11. صندوق الدعم الفني والتذاكر (موظف الدعم + بحث ذكي بـ LISAN-XXXXXXXX)
+ * 12. صندوق الدعم الفني والتذاكر (موظف الدعم + بحث ذكي بـ LISAN-XXXXXXXX)
  * ============================================================================ */
 function renderSupportDesk(container) {
   if (!hasPerm("manage_support")) return navigateAdmin("hub");
@@ -1370,11 +1609,21 @@ function openTicketReplyModal(tk) {
   });
 
   document.getElementById("toggle-close-ticket-btn")?.addEventListener("click", async () => {
-    const nextStatus = tk.status === "closed" ? "open" : "closed";
+    const closing = tk.status !== "closed";
+    const res = await confirmActionModal({
+      title: closing ? "تأكيد إغلاق تذكرة الدعم" : "تأكيد إعادة فتح التذكرة",
+      target: `${tid} — ${tk.requesterName}`,
+      message: closing ? "لن يتمكن المستفيد من إرسال ردود جديدة في هذه التذكرة بعد إغلاقها." : "ستعود التذكرة مفتوحة لمتابعة المحادثة مع المستفيد.",
+      confirmText: closing ? "نعم، إغلاق التذكرة" : "نعم، إعادة فتح",
+      tone: closing ? "warning" : "primary"
+    });
+    if (!res.confirmed) return;
+
+    const nextStatus = closing ? "closed" : "open";
     await updateDoc(doc(db, "tickets", tk.id), { status: nextStatus, updatedAt: new Date().toISOString() });
     tk.status = nextStatus;
-    await logActivity(nextStatus === "closed" ? "إغلاق تذكرة دعم" : "إعادة فتح تذكرة دعم", tid);
-    showToast(nextStatus === "closed" ? "تم إغلاق التذكرة ✓" : "تمت إعادة فتح التذكرة ✓");
+    await logActivity(closing ? "إغلاق تذكرة دعم" : "إعادة فتح تذكرة دعم", tid);
+    showToast(closing ? "تم إغلاق التذكرة ✓" : "تمت إعادة فتح التذكرة ✓");
     closeModal();
     renderAdminView();
   });
@@ -1414,7 +1663,7 @@ function openTicketReplyModal(tk) {
 }
 
 /* ============================================================================
- * 12. صندوق الصفحات التعريفية المرنة (من نحن، المنهجية، الخصوصية، مخصصة)
+ * 13. صندوق الصفحات التعريفية المرنة (مع نافذة التأكيد الزجاجية)
  * ============================================================================ */
 function renderPagesManager(container) {
   if (!hasPerm("manage_pages")) return navigateAdmin("hub");
@@ -1462,7 +1711,15 @@ function renderPagesManager(container) {
   container.querySelectorAll("[data-del-page]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const found = state.pages.find((p) => p.id === btn.dataset.delPage);
-      if (!found || !confirm(`حذف الصفحة "${found.title}" نهائياً؟`)) return;
+      if (!found) return;
+      const res = await confirmActionModal({
+        title: "تأكيد حذف الصفحة التعريفية",
+        target: found.title,
+        message: "سيتم حذف هذه الصفحة نهائياً وإزالة رابطها من تذييل الموقع العام.",
+        confirmText: "نعم، حذف نهائي",
+        tone: "danger"
+      });
+      if (!res.confirmed) return;
       await deleteDoc(doc(db, "pages", found.id));
       state.pages = state.pages.filter((p) => p.id !== found.id);
       await logActivity("حذف صفحة تعريفية", found.title);
@@ -1557,7 +1814,7 @@ function openPageEditorModal(page = null) {
 }
 
 /* ============================================================================
- * 13. صندوق إدارة المحتوى والمحرر الأكاديمي الحر (v2.0 + v3.0)
+ * 14. صندوق إدارة المحتوى والمحرر الأكاديمي الحر
  * ============================================================================ */
 function renderContentManager(container) {
   if (!hasPerm("manage_content")) return navigateAdmin("hub");
@@ -1636,10 +1893,18 @@ function renderContentManager(container) {
     listEl.querySelectorAll("[data-del-item]").forEach((b) => {
       b.addEventListener("click", async () => {
         const f = state.items.find((x) => x.id === b.dataset.delItem);
-        if (!f || !confirm(`هل أنت متأكد من حذف "${f.title}" نهائياً؟`)) return;
+        if (!f) return;
+        const res = await confirmActionModal({
+          title: "تأكيد حذف المادة نهائياً",
+          target: f.title,
+          message: "سيتم حذف هذه المادة بشكل دائم من قاعدة البيانات ولن يمكن استرجاعها.",
+          confirmText: "نعم، حذف المادة",
+          tone: "danger"
+        });
+        if (!res.confirmed) return;
         await deleteDoc(doc(db, "items", f.id));
         state.items = state.items.filter((x) => x.id !== f.id);
-        await logActivity("حذف مادة", f.title);
+        await logActivity("حذف مادة نهائياً", f.title);
         showToast("تم حذف المادة");
         paintList();
       });
@@ -1957,7 +2222,7 @@ function openLivePreviewModal(snap) {
 function closeLivePreviewModal() { const b = document.getElementById("preview-modal-backdrop"); if (b) b.hidden = true; }
 
 /* ============================================================================
- * 14. صندوق الاختبارات + صندوق مساهمات الطلبة (مع إشعار فوري للطالب)
+ * 15. صندوق الاختبارات + صندوق مساهمات الطلبة (مع نافذة التأكيد الزجاجية)
  * ============================================================================ */
 function renderQuizzesManager(container) {
   if (!hasPerm("manage_quizzes")) return navigateAdmin("hub");
@@ -1993,10 +2258,18 @@ function renderQuizzesManager(container) {
     wrap.querySelectorAll("[data-edit-quiz]").forEach((b) => b.addEventListener("click", () => { const f = state.quizzes.find((x) => x.id === b.dataset.editQuiz); if (f) openQuizEditorModal(f); }));
     wrap.querySelectorAll("[data-del-quiz]").forEach((b) => b.addEventListener("click", async () => {
       const f = state.quizzes.find((x) => x.id === b.dataset.delQuiz);
-      if (!f || !confirm(`حذف الاختبار "${f.title}" نهائياً؟`)) return;
+      if (!f) return;
+      const res = await confirmActionModal({
+        title: "تأكيد حذف الاختبار نهائياً",
+        target: f.title,
+        message: "سيتم حذف هذا الاختبار وجميع أسئلته بشكل دائم (تبقى درجات الطلبة السابقة محفوظة في سجلاتهم).",
+        confirmText: "نعم، حذف الاختبار",
+        tone: "danger"
+      });
+      if (!res.confirmed) return;
       await deleteDoc(doc(db, "quizzes", f.id));
       state.quizzes = state.quizzes.filter((x) => x.id !== f.id);
-      await logActivity("حذف اختبار", f.title);
+      await logActivity("حذف اختبار نهائياً", f.title);
       showToast("تم حذف الاختبار");
       paint();
     }));
@@ -2106,6 +2379,15 @@ function renderSubmissionsQueue(container) {
     btn.addEventListener("click", async () => {
       const it = state.items.find((x) => x.id === btn.dataset.approve);
       if (!it) return;
+      const res = await confirmActionModal({
+        title: "تأكيد اعتماد ونشر المساهمة",
+        target: it.title,
+        message: "ستُعرض هذه المساهمة فوراً للجميع في فضاء التبادل العلمي وسيصل للطالب إشعار تهنئة.",
+        confirmText: "نعم، اعتماد ونشر",
+        tone: "primary"
+      });
+      if (!res.confirmed) return;
+
       await updateDoc(doc(db, "items", it.id), { status: "published" });
       it.status = "published";
       if (it.studentUid) {
@@ -2120,23 +2402,34 @@ function renderSubmissionsQueue(container) {
       renderAdminView();
     });
   });
+
   container.querySelectorAll("[data-review-edit]").forEach((b) => b.addEventListener("click", () => { const it = state.items.find((x) => x.id === b.dataset.reviewEdit); if (it) openItemEditorModal(it); }));
+
   container.querySelectorAll("[data-reject]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const it = state.items.find((x) => x.id === btn.dataset.reject);
       if (!it) return;
-      const reason = prompt("اكتب سبباً أو ملاحظة لطيفة للطالب (اختياري):", "");
-      if (reason === null) return;
+      const res = await confirmActionModal({
+        title: "تأكيد رفض وإزالة المساهمة",
+        target: it.title,
+        message: "سيتم حذف المساهمة المعلقة وإرسال ملاحظتك التوضيحية إلى صندوق إشعارات الطالب.",
+        confirmText: "نعم، رفض وإشعار الطالب",
+        tone: "danger",
+        inputLabel: "ملاحظة أو سبب الرفض (يصل للطالب):",
+        inputPlaceholder: "مثال: يرجى توثيق المصادر وإعادة الإرسال..."
+      });
+      if (!res.confirmed) return;
+
       await deleteDoc(doc(db, "items", it.id));
       state.items = state.items.filter((x) => x.id !== it.id);
       if (it.studentUid) {
         await sendStudentNotification(it.studentUid, {
           type: "warning",
           title: `ملاحظة حول مساهمتك: ${it.title}`,
-          message: reason.trim() || "لم تُعتمد المساهمة للنشر حالياً، يمكنك تعديلها وإعادة إرسالها."
+          message: res.inputValue || "لم تُعتمد المساهمة للنشر حالياً، يمكنك تعديلها وإعادة إرسالها."
         });
       }
-      await logActivity("رفض مساهمة", it.title);
+      await logActivity("رفض مساهمة طالب", `${it.title}${res.inputValue ? ` — الملاحظة: ${res.inputValue}` : ""}`);
       showToast("تمت إزالة المساهمة وإشعار صاحبها");
       renderAdminView();
     });
@@ -2144,7 +2437,7 @@ function renderSubmissionsQueue(container) {
 }
 
 /* ============================================================================
- * 15. الأقسام الستة + التحكم الثلاثي بالميزات (مفعّل / قريباً / مخفي)
+ * 16. الأقسام الستة + التحكم الثلاثي بالميزات (مفعّل / قريباً / مخفي)
  * ============================================================================ */
 function renderSectionsManager(container) {
   if (!hasPerm("manage_sections")) return navigateAdmin("hub");
@@ -2169,6 +2462,14 @@ function renderSectionsManager(container) {
   `;
   document.getElementById("back-to-hub")?.addEventListener("click", () => navigateAdmin("hub"));
   document.getElementById("save-sections-btn")?.addEventListener("click", async () => {
+    const res = await confirmActionModal({
+      title: "تأكيد تحديث بنية الأقسام",
+      message: "ستنعكس التعديلات على مسميات وفروع الأقسام الستة في الموقع العام فوراً.",
+      confirmText: "نعم، حفظ وتطبيق",
+      tone: "primary"
+    });
+    if (!res.confirmed) return;
+
     container.querySelectorAll("[data-sec-card]").forEach((card) => {
       const id = card.dataset.secCard;
       state.settings.sectionsMeta[id] = {
@@ -2204,7 +2505,7 @@ function renderFeaturesManager(container) {
                 <strong>${f.label}</strong>
                 <p>${f.desc}</p>
               </div>
-              <div class="tri-state-segment" data-flag-seg="${f.key}">
+              <div class="tri-state-segment" data-flag-seg="${f.key}" data-flag-label="${escapeHtml(f.label)}">
                 <button type="button" class="tri-btn ${cur === "on" ? "active on" : ""}" data-val="on">مفعّل</button>
                 <button type="button" class="tri-btn ${cur === "soon" ? "active soon" : ""}" data-val="soon">قريباً</button>
                 <button type="button" class="tri-btn ${cur === "off" ? "active off" : ""}" data-val="off">مخفي</button>
@@ -2220,16 +2521,33 @@ function renderFeaturesManager(container) {
 
   container.querySelectorAll("[data-flag-seg]").forEach((seg) => {
     const key = seg.dataset.flagSeg;
+    const label = seg.dataset.flagLabel;
     seg.querySelectorAll(".tri-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const val = btn.dataset.val;
+        const prev = normalizeFeatureVal(state.settings.features[key]);
+        if (val === prev) return;
+
+        const lbl = val === "on" ? "مفعّلة" : val === "soon" ? "قريباً" : "مخفية تماماً";
+        const res = await confirmActionModal({
+          title: "تأكيد تغيير حالة الميزة",
+          target: `${label} ← ${lbl}`,
+          message: val === "off"
+            ? "ستختفي هذه الميزة تماماً عن جميع زوار وطلبة الموقع العام فوراً."
+            : val === "soon"
+              ? "ستظهر رسالة أنيقة للزوار بأن هذه الميزة ستتوفر قريباً."
+              : "ستعود هذه الميزة للعمل وإتاحتها لجميع الزوار فوراً.",
+          confirmText: "نعم، تطبيق التغيير",
+          tone: val === "off" ? "warning" : "primary"
+        });
+        if (!res.confirmed) return;
+
         state.settings.features[key] = val;
         seg.querySelectorAll(".tri-btn").forEach((b) => b.classList.remove("active", "on", "soon", "off"));
         btn.classList.add("active", val);
         try {
           await setDoc(doc(db, "settings", "global"), { features: state.settings.features }, { merge: true });
-          const lbl = val === "on" ? "مفعّلة" : val === "soon" ? "قريباً" : "مخفية";
-          await logActivity("تحديث حالة ميزة", `${key} => ${lbl}`);
+          await logActivity("تحديث حالة ميزة", `${label} => ${lbl}`);
           showToast(`تم تحويل حالة الميزة إلى (${lbl}) ✓`);
         } catch {
           showToast("تعذر التحديث", "error");
@@ -2240,7 +2558,7 @@ function renderFeaturesManager(container) {
 }
 
 /* ============================================================================
- * 16. الإعدادات الشاملة: الهوية + قنوات الدعم + سياسة التسجيل + مولّد sitemap.xml
+ * 17. الإعدادات الشاملة: الهوية + قنوات الدعم + سياسة التسجيل + مولّد sitemap.xml
  * ============================================================================ */
 function buildSitemapXml(baseUrlRaw) {
   const cleanBase = (baseUrlRaw || "https://example.com").trim().replace(/\/+$/, "");
@@ -2388,6 +2706,14 @@ function renderSettingsManager(container) {
 
   document.getElementById("global-settings-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
+    const res = await confirmActionModal({
+      title: "تأكيد حفظ الإعدادات العامة",
+      message: "سيتم تطبيق التعديلات على الهوية، الألوان، وقنوات الدعم في المنصة العامة وغرفة العمليات فوراً.",
+      confirmText: "نعم، حفظ وتطبيق",
+      tone: "primary"
+    });
+    if (!res.confirmed) return;
+
     const btn = document.getElementById("save-settings-btn");
     btn.disabled = true;
     state.settings = {
@@ -2443,7 +2769,7 @@ function renderSettingsManager(container) {
 }
 
 /* ============================================================================
- * 17. فريق الإدارة والدعم (مع النبذة والبحث الذكي) + حسابي والأمان والسجلات
+ * 18. فريق الإدارة والدعم (حصانة مطلقة للأدمن الرئيسي + حصر الحذف به وحده)
  * ============================================================================ */
 function renderAdminsManager(container) {
   if (!hasPerm("manage_admins")) return navigateAdmin("hub");
@@ -2452,9 +2778,14 @@ function renderAdminsManager(container) {
     <div class="container">
       ${renderSubHeader(
         "فريق الإدارة والدعم الفني",
-        "أضف مشرفين أو موظفي دعم فني بصورهم ونبذهم؛ البحث الذكي يلتقط أي كلمة من الاسم أو النبذة.",
+        "أضف مشرفين أو موظفي دعم بصلاحيات محددة. حساب الأدمن الرئيسي محصّن بالكامل، وحذف الموظفين حصري للإدارة العليا.",
         `<button type="button" class="btn-primary-glass" id="btn-new-admin">${ICONS.plus} إضافة موظف</button>`
       )}
+
+      <div class="light-guide-bar">
+        🛡 <strong>سياسة الحصانة:</strong> لا يستطيع أي مشرف تعديل أو إيقاف حساب <strong>الأدمن الرئيسي</strong>، كما أن زر <strong>الحذف النهائي</strong> لأي موظف لا يظهر إلا لحساب الإدارة العليا فقط.
+      </div>
+
       <div class="glass-panel filter-toolbar">
         <div class="local-search-box full-flex">
           <span>${ICONS.search}</span>
@@ -2473,48 +2804,87 @@ function renderAdminsManager(container) {
     const wrap = document.getElementById("admins-list-wrap");
     if (!list.length) { wrap.innerHTML = `<div class="glass-card empty-state"><p>لم يُعثر على موظف مطابق.</p></div>`; return; }
 
-    wrap.innerHTML = list.map((ad) => `
-      <div class="glass-card admin-row-card">
-        ${renderAvatarHtml(ad.avatarUrl, ad.displayName || ad.username, "md")}
-        <div class="row-main">
-          <div class="row-badges">
-            <span class="pill-badge">${ad.isSuperAdmin ? "أدمن رئيسي" : `${(ad.permissions || []).length} صلاحيات`}</span>
-            <span class="status-dot ${ad.active !== false ? "published" : "draft"}">${ad.active !== false ? "نشط" : "موقوف"}</span>
-          </div>
-          <h3>${escapeHtml(ad.displayName || ad.username)}</h3>
-          <p class="admin-meta-line">اسم المستخدم: <strong dir="ltr">${escapeHtml(ad.username)}</strong></p>
-          ${ad.bio ? `<p class="admin-bio-line">${escapeHtml(ad.bio)}</p>` : ""}
-        </div>
-        <div class="row-actions">
-          <button type="button" class="tool-btn" data-edit-admin="${ad.id}">${ICONS.edit} تعديل</button>
-          ${!ad.isSuperAdmin ? `<button type="button" class="tool-btn danger" data-del-admin="${ad.id}">${ICONS.trash} حذف</button>` : ""}
-        </div>
-      </div>
-    `).join("");
+    const amSuper = isSuperAdminUser();
 
-    wrap.querySelectorAll("[data-edit-admin]").forEach((b) => b.addEventListener("click", () => { const f = state.admins.find((x) => x.id === b.dataset.editAdmin); if (f) openAdminEditorModal(f); }));
+    wrap.innerHTML = list.map((ad) => {
+      const targetIsSuper = Boolean(ad.isSuperAdmin);
+      const canEdit = targetIsSuper ? amSuper : true;
+      const canDelete = amSuper && !targetIsSuper && ad.id !== state.currentUser.id;
+
+      return `
+        <div class="glass-card admin-row-card ${targetIsSuper ? "super-admin-card" : ""}">
+          ${renderAvatarHtml(ad.avatarUrl, ad.displayName || ad.username, "md")}
+          <div class="row-main">
+            <div class="row-badges">
+              ${targetIsSuper
+                ? `<span class="immunity-badge">🛡 محصّن — الإدارة العليا (الأدمن الرئيسي)</span>`
+                : `<span class="pill-badge">${(ad.permissions || []).length} صلاحيات</span>`}
+              <span class="status-dot ${ad.active !== false ? "published" : "draft"}">${ad.active !== false ? "نشط" : "موقوف"}</span>
+            </div>
+            <h3>${escapeHtml(ad.displayName || ad.username)}</h3>
+            <p class="admin-meta-line">اسم المستخدم: <strong dir="ltr">${escapeHtml(ad.username)}</strong></p>
+            ${ad.bio ? `<p class="admin-bio-line">${escapeHtml(ad.bio)}</p>` : ""}
+          </div>
+          <div class="row-actions">
+            ${canEdit
+              ? `<button type="button" class="tool-btn" data-edit-admin="${ad.id}">${ICONS.edit} تعديل</button>`
+              : `<span class="locked-chip">🔒 حساب محصّن</span>`}
+            ${canDelete
+              ? `<button type="button" class="tool-btn danger" data-del-admin="${ad.id}">${ICONS.trash} حذف نهائي</button>`
+              : ""}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    wrap.querySelectorAll("[data-edit-admin]").forEach((b) => b.addEventListener("click", () => {
+      const f = state.admins.find((x) => x.id === b.dataset.editAdmin);
+      if (f) openAdminEditorModal(f);
+    }));
+
     wrap.querySelectorAll("[data-del-admin]").forEach((b) => b.addEventListener("click", async () => {
+      if (!isSuperAdminUser()) {
+        showToast("الحذف النهائي للموظفين حصري للأدمن الرئيسي فقط.", "error");
+        return;
+      }
       const f = state.admins.find((x) => x.id === b.dataset.delAdmin);
-      if (!f || f.isSuperAdmin || !confirm(`حذف حساب "${f.username}" نهائياً؟`)) return;
+      if (!f || f.isSuperAdmin || f.id === state.currentUser.id) return;
+
+      const res = await confirmActionModal({
+        title: "تأكيد حذف حساب الموظف نهائياً",
+        target: `${f.displayName || f.username} (${f.username})`,
+        message: "سيتم حذف هذا الحساب نهائياً وفقدانه صلاحية الدخول فوراً. تبقى عملياته السابقة موثقة في سجل النشاطات.",
+        confirmText: "نعم، حذف الحساب نهائياً",
+        tone: "danger"
+      });
+      if (!res.confirmed) return;
+
       await deleteDoc(doc(db, "admins", f.id));
       state.admins = state.admins.filter((x) => x.id !== f.id);
-      await logActivity("حذف موظف", f.username);
-      showToast("تم حذف الحساب");
+      await logActivity("حذف حساب موظف نهائياً", `${f.displayName || f.username} (${f.username})`);
+      showToast("تم حذف حساب الموظف نهائياً ✓");
       paint();
     }));
   };
+
   document.getElementById("admin-search-input")?.addEventListener("input", (e) => { state.filters.adminSearch = e.target.value; paint(); });
   paint();
 }
 
 function openAdminEditorModal(admin = null) {
+  // حماية برمجية صارمة لحصانة الأدمن الرئيسي
+  if (admin?.isSuperAdmin && !isSuperAdminUser()) {
+    showToast("عذراً، حساب الأدمن الرئيسي محصّن ولا يمكن تعديله إلا من قِبل الإدارة العليا نفسها.", "error");
+    return;
+  }
+
   const isEdit = Boolean(admin);
   const currentPerms = new Set(admin?.permissions || []);
 
   openModal(isEdit ? `تعديل حساب: ${admin.displayName || admin.username}` : "إضافة مشرف / موظف دعم جديد", `
     <form id="admin-user-form" class="editor-form">
       <div class="tip-banner">
-        <strong>نصيحة:</strong> يمكنك إنشاء <strong>موظف دعم فني فقط</strong> بتحديد مربع «موظف دعم فني» وحده دون باقي الصلاحيات، وأضف تخصصه في النبذة لتسهيل البحث عنه لاحقاً.
+        <strong>توجيه:</strong> يمكنك إنشاء <strong>موظف دعم فني فقط</strong> بتحديد مربع «موظف دعم فني» وحده دون باقي الصلاحيات. تذكّر أن صلاحية حذف الموظفين محصورة بالأدمن الرئيسي فقط.
       </div>
       <div class="avatar-editor-row">
         <div id="adm-avatar-preview">${renderAvatarHtml(admin?.avatarUrl, admin?.displayName || "م", "lg")}</div>
@@ -2538,9 +2908,15 @@ function openAdminEditorModal(admin = null) {
       <div class="form-group"><label>نبذة تعريفية عن الموظف ومهامه (مفهرسة بالبحث الذكي)</label><textarea id="adm-bio" rows="2">${escapeHtml(admin?.bio || "")}</textarea></div>
       <div class="form-grid-2">
         <div class="form-group"><label>${isEdit ? "كلمة مرور جديدة (اتركها فارغة للإبقاء)" : "كلمة المرور *"}</label><input type="password" id="adm-password" ${isEdit ? "" : "required"} /></div>
-        <div class="form-group"><label>حالة الحساب</label><select id="adm-active" ${admin?.isSuperAdmin ? "disabled" : ""}><option value="true" ${admin?.active !== false ? "selected" : ""}>نشط</option><option value="false" ${admin?.active === false ? "selected" : ""}>موقوف</option></select></div>
+        <div class="form-group">
+          <label>حالة الحساب</label>
+          <select id="adm-active" ${admin?.isSuperAdmin || admin?.id === state.currentUser.id ? "disabled" : ""}>
+            <option value="true" ${admin?.active !== false ? "selected" : ""}>نشط</option>
+            <option value="false" ${admin?.active === false ? "selected" : ""}>موقوف مؤقتاً</option>
+          </select>
+        </div>
       </div>
-      ${admin?.isSuperAdmin ? `<div class="tip-banner">الأدمن الرئيسي يملك كافة الصلاحيات دائماً.</div>` : `
+      ${admin?.isSuperAdmin ? `<div class="tip-banner">🛡 هذا الحساب هو <strong>الأدمن الرئيسي المحصّن</strong> ويملك كافة الصلاحيات بشكل دائم ولا يمكن تعطيله.</div>` : `
         <div class="form-group">
           <label>الصلاحيات الممنوحة (اختيار مرن ودقيق):</label>
           <div class="perms-checklist">
@@ -2548,7 +2924,7 @@ function openAdminEditorModal(admin = null) {
           </div>
         </div>
       `}
-      <div class="modal-footer-actions"><button type="button" class="tool-btn" id="cancel-admin-btn">إلغاء</button><button type="submit" class="btn-primary-glass" id="save-admin-btn">${isEdit ? "حفظ التغييرات" : "إنشاء الحساب"}</button></div>
+      <div class="modal-footer-actions"><button type="button" class="tool-btn" id="cancel-admin-btn">إلغاء</button><button type="submit" class="btn-primary-glass" id="save-admin-btn">${isEdit ? "مراجعة وحفظ التغييرات" : "تأكيد وإنشاء الحساب"}</button></div>
     </form>
   `);
 
@@ -2575,17 +2951,39 @@ function openAdminEditorModal(admin = null) {
 
   document.getElementById("admin-user-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (admin?.isSuperAdmin && !isSuperAdminUser()) {
+      showToast("غير مصرّح بتعديل حساب الأدمن الرئيسي.", "error");
+      return;
+    }
+
     const username = usernameInput.value.trim();
-    if (isDup(username) || ((await findAdminByUsername(username))?.id && (await findAdminByUsername(username)).id !== admin?.id)) {
+    const remoteExisting = await findAdminByUsername(username);
+    if (isDup(username) || (remoteExisting && remoteExisting.id !== admin?.id)) {
       showToast("هذا اسم مستخدم مسجل لدينا بالفعل!", "error"); return;
     }
+
+    const displayName = document.getElementById("adm-display").value.trim();
+    const isActiveNext = admin?.isSuperAdmin || admin?.id === state.currentUser.id ? true : document.getElementById("adm-active").value === "true";
+    const perms = admin?.isSuperAdmin ? PERMISSIONS_CATALOG.map((p) => p.key) : Array.from(document.querySelectorAll(".adm-perm-chk:checked")).map((c) => c.value);
+
+    const res = await confirmActionModal({
+      title: isEdit ? "تأكيد تحديث بيانات وصلاحيات الموظف" : "تأكيد إنشاء حساب موظف جديد",
+      target: `${displayName} (${username})`,
+      message: isActiveNext
+        ? `سيتم منح هذا الحساب ${perms.length} صلاحية وتفعيل دخوله لغرفة العمليات.`
+        : "سيتم إيقاف هذا الحساب مؤقتاً ومنعه من الدخول حتى تعيد تفعيله.",
+      confirmText: isEdit ? "نعم، حفظ التعديلات" : "نعم، إنشاء الحساب",
+      tone: isActiveNext ? "primary" : "warning"
+    });
+    if (!res.confirmed) return;
+
     const payload = {
-      displayName: document.getElementById("adm-display").value.trim(),
+      displayName,
       username, usernameLower: username.toLowerCase(),
       avatarUrl: document.getElementById("adm-avatar-url").value.trim(),
       bio: document.getElementById("adm-bio").value.trim(),
-      active: admin?.isSuperAdmin ? true : document.getElementById("adm-active").value === "true",
-      permissions: admin?.isSuperAdmin ? PERMISSIONS_CATALOG.map((p) => p.key) : Array.from(document.querySelectorAll(".adm-perm-chk:checked")).map((c) => c.value),
+      active: isActiveNext,
+      permissions: perms,
       updatedAt: new Date().toISOString()
     };
     const newPass = document.getElementById("adm-password").value;
@@ -2601,11 +2999,14 @@ function openAdminEditorModal(admin = null) {
       const ref = await addDoc(collection(db, "admins"), payload);
       state.admins.push({ id: ref.id, ...payload });
     }
-    await logActivity(isEdit ? "تعديل موظف" : "إضافة موظف", username);
-    showToast("تم حفظ بيانات الموظف ✓"); closeModal(); renderAdminView();
+    await logActivity(isEdit ? "تعديل بيانات/صلاحيات موظف" : "إضافة موظف جديد", `${displayName} (${username}) — الحالة: ${isActiveNext ? "نشط" : "موقوف"}`);
+    showToast("تم حفظ بيانات الموظف بنجاح ✓"); closeModal(); renderAdminView();
   });
 }
 
+/* ============================================================================
+ * 19. حسابي والأمان والسجلات
+ * ============================================================================ */
 function renderSecurityAndLogs(container) {
   const trusted = getTrustedDevice();
   const isThisTrusted = trusted?.adminId === state.currentUser.id;
@@ -2702,13 +3103,35 @@ function renderSecurityAndLogs(container) {
     showToast("تم حفظ الرمز السريع ✓");
     renderAdminView();
   });
-  document.getElementById("revoke-trust-btn")?.addEventListener("click", () => { clearTrustedDevice(); showToast("تم إلغاء الثقة"); renderAdminView(); });
+
+  document.getElementById("revoke-trust-btn")?.addEventListener("click", async () => {
+    const res = await confirmActionModal({
+      title: "إلغاء الثقة بهذا المتصفح",
+      message: "سيطلب منك النظام إدخال اسم المستخدم وكلمة المرور في المرة القادمة.",
+      confirmText: "نعم، إلغاء الثقة",
+      tone: "warning"
+    });
+    if (!res.confirmed) return;
+    clearTrustedDevice();
+    showToast("تم إلغاء الثقة");
+    renderAdminView();
+  });
+
   document.getElementById("pass-update-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     if ((await sha256(document.getElementById("sec-old-pass").value)) !== state.currentUser.passwordHash) { showToast("كلمة المرور الحالية غير صحيحة", "error"); return; }
+    const res = await confirmActionModal({
+      title: "تأكيد تغيير كلمة المرور",
+      message: "سيتم اعتماد كلمة المرور الجديدة فوراً لحسابك الإداري.",
+      confirmText: "نعم، تحديث كلمة المرور",
+      tone: "primary"
+    });
+    if (!res.confirmed) return;
+
     const newHash = await sha256(document.getElementById("sec-new-pass").value);
     await updateDoc(doc(db, "admins", me.id), { passwordHash: newHash });
     state.currentUser.passwordHash = newHash;
+    await logActivity("تغيير كلمة المرور", me.username);
     showToast("تم تحديث كلمة المرور ✓");
     e.target.reset();
   });
@@ -2729,7 +3152,7 @@ function renderSecurityAndLogs(container) {
 }
 
 /* ============================================================================
- * 18. البحث العالمي الذكي (تذاكر LISAN- + طلبة + محتوى + اختبارات + نبذ الموظفين)
+ * 20. البحث العالمي الذكي (تذاكر LISAN- + طلبة + محتوى + اختبارات + نبذ الموظفين)
  * ============================================================================ */
 function openAdminSpotlight() {
   const modal = document.getElementById("admin-spotlight-modal");
@@ -2757,7 +3180,7 @@ function renderAdminSpotlightResults(q) {
   }
   if (hasPerm("manage_students")) {
     smartFilter(state.students, q, (s) => `${s.fullName || ""} ${s.email || ""} ${s.university || ""} ${s.major || ""}`).slice(0, 6).forEach((s) => {
-      hits.push({ type: "student", id: s.id, title: s.fullName, sub: `${s.university || ""} • ${s.email}`, tag: "طالب" });
+      hits.push({ type: "student", id: s.id, title: s.fullName, sub: `${s.university || ""} • ${s.email}`, tag: s.status === "terminated" ? "أرشيف مشطوب" : "طالب" });
     });
   }
   if (hasPerm("manage_content")) {
@@ -2772,7 +3195,7 @@ function renderAdminSpotlightResults(q) {
   }
   if (hasPerm("manage_admins")) {
     smartFilter(state.admins, q, (ad) => `${ad.displayName || ""} ${ad.username} ${ad.bio || ""}`).slice(0, 5).forEach((ad) => {
-      hits.push({ type: "admin", id: ad.id, title: ad.displayName || ad.username, sub: ad.bio || ad.username, tag: "موظف" });
+      hits.push({ type: "admin", id: ad.id, title: ad.displayName || ad.username, sub: ad.bio || ad.username, tag: ad.isSuperAdmin ? "محصّن" : "موظف" });
     });
   }
 
@@ -2799,7 +3222,7 @@ function renderAdminSpotlightResults(q) {
 }
 
 /* ============================================================================
- * 19. النافذة المنبثقة العامة ونقطة الانطلاق
+ * 21. النافذة المنبثقة العامة ونقطة الانطلاق
  * ============================================================================ */
 function openModal(title, bodyHtml, size = "normal") {
   const backdrop = document.getElementById("admin-modal-backdrop");
@@ -2837,6 +3260,7 @@ function initAdminApp() {
       e.preventDefault();
       openAdminSpotlight();
     } else if (e.key === "Escape") {
+      if (document.getElementById("lisan-confirm-backdrop")) return;
       if (!document.getElementById("preview-modal-backdrop")?.hidden) closeLivePreviewModal();
       else { closeAdminSpotlight(); closeModal(); }
     }
